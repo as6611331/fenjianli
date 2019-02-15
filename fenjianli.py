@@ -918,7 +918,7 @@ class downloader(object):
 
         #下载结果报告
         print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
-        # input("回车结束程序")
+        input("回车结束程序")
 
 if __name__=='__main__':
 
