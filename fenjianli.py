@@ -1,6 +1,5 @@
 import requests, time, os, random,re,csv,xlwt,json,pymysql
 from docx import Document
-from win32com import client as wc
 from bs4 import BeautifulSoup
 from selenium import webdriver
 
@@ -8,13 +7,15 @@ class downloader(object):
     def __init__(self):
 
         # 符合html条件对文件位置
-        self.url_all=[]
-        self.cookie = ''
-        self.data_D_max = 100
-        self.data_D_min = 0
-        self.data_U_max = 440
-        self.condition={}
-        self.account=''
+        self.url_all=[] #上传
+        self.cookie = '' #上传 下载
+        self.data_D_max = 100 #下载
+        self.data_D_min = 0 #下载
+        self.condition={} #下载 转换
+        self.account='' #下载 转换
+
+        # 数据库启动
+        self.sql_status=True
 
         # 纷简历3
         self.url_fenjianli_3 = []
@@ -27,22 +28,8 @@ class downloader(object):
         self.url_fenjianli_4_datas=[]
 
         self.conversion_situation={'正确简历':0,'错误简历':0,'其他类型':0}
-        self.upload_situation={'上传成功':0,'已存在相同简历':0,'上传失败':0}
+        self.upload_situation={'上传成功':0,'存在简历':0,'上传失败':0}
         self.download_situation = {'下载成功': 0,'下载失败': 0}
-
-    # 获得cookie
-    def get_cookies(self):
-        login = 'http://www.fenjianli.com/login'
-        diver = webdriver.Chrome()
-        diver.get(login)
-        while True:
-            time.sleep(1)
-            try:
-                self.cookie = diver.get_cookies()[1]['value']
-                break
-            except:
-                pass
-        diver.quit()
 
     # 检查数据库重复
     def mysql_judge(self,table_name,operating,data):
@@ -64,7 +51,7 @@ class downloader(object):
             elif operating=='insert':
                 if ret == None:
                     downdate = time.strftime('%Y-%m-%d', time.localtime(time.time()))
-                    upload = [resume_id, downdate, self.account, str(json.dumps(self.condition, ensure_ascii=False))]
+                    upload = [resume_id, downdate, dl.account, str(json.dumps(dl.condition, ensure_ascii=False))]
                     format = str(',%s' * len(upload))[1:]
                     cur.execute('insert into {0} values({1})'.format('fenjianli_id', format), upload)  # 插入数据
 
@@ -88,60 +75,75 @@ class downloader(object):
         db.close()
 
     # 获得cookie
-    def get_cookies2(self):
-        login = 'http://www.fenjianli.com/login'
-        diver = webdriver.Chrome()
-        diver.get(login)
-        while True:
-            time.sleep(1)
-            try:
-                self.cookie = diver.get_cookies()[1]['value']
-                break
-            except:
-                pass
-        diver.quit()
+    def get_cookies2(self,status=''):
 
+        cookie_status=os.path.isfile(".\cookie.txt")
+
+        if cookie_status==False or status=='登录失效':
+            login = 'http://www.fenjianli.com/login'
+            diver = webdriver.Chrome()
+            diver.get(login)
+            while True:
+                time.sleep(1)
+                try:
+                    dl.cookie = diver.get_cookies()[1]['value']
+                    break
+                except:
+                    pass
+            diver.quit()
+            with open('cookie.txt', 'w', encoding='UTF-8') as f:
+                f.write(dl.cookie)
+        else:
+            with open('cookie.txt', 'r', encoding='UTF-8') as f:
+                dl.cookie = f.read()
+
+    # 读取下载剩余简历数
+    def get_score(self):
+        url = 'http://www.fenjianli.com/user'
+        headers = {
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Connection': 'keep-alive',
+            'Content-Length': '0',
+            'Host': 'www.fenjianli.com',
+            'Origin': 'http://www.fenjianli.com',
+            'Referer': 'http://www.fenjianli.com/share',
+            'X-Requested-With': 'XMLHttpRequest',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36',
+        }
+        cookies = {'fid': dl.cookie}
+        html = requests.post(url, cookies=cookies, headers=headers)
+        html = json.loads(html.text)
+        htmls = str(html['data']['usable_download_time'])
+        return htmls
+
+    # 自动新建文件夹
+    def makedirs(self,path):
+        if not os.path.exists(path):
+            os.makedirs(path)
 
     '''--------------------上传程序--------------------'''
 
-    #上传文件
+    # 上传文件
     def post_files(self,path):
 
         #给个随机文件名
         name = str(random.randint(10000000, 100000000))+os.path.splitext(path)[-1]
-
         url = 'http://www.fenjianli.com/share/upload'
-
-        headers = {
-            'Accept': '*/*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Connection': 'keep-alive',
-            # 'Content-Length': '12097',
-            # 'Content-Type': 'multipart/form-data',
-            'Host': 'www.fenjianli.com',
-            'Origin': 'http://www.fenjianli.com',
-            'Referer': 'http://www.fenjianli.com/share',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        }
-
-        cookies = {'fid': self.cookie}
-
-        # files = {'file': (name,open(path, 'rb'))}
-        # r = requests.post(url, files=files, cookies=cookies, headers=headers)
+        cookies = {'fid': dl.cookie}
         files = {'file': (name, open(path, 'rb'), 'application/msword', {'Expires': '0'})}
-        r = requests.post(url, files=files, cookies=cookies)
-        r=str(json.loads(r.text))
-        # print(r)
-        if '上传成功' in r:
+        success = requests.post(url, files=files, cookies=cookies)
+        success=str(json.loads(success.text))
+        if '上传成功' in success:
             msg = '上传成功'
             self.upload_situation['上传成功']+=1
 
-        elif '已存在相同简历' in r:
-            msg = '已存在相同简历'
-            self.upload_situation['已存在相同简历'] += 1
+        elif '已存在相同简历' in success:
+            msg = '存在简历'
+            self.upload_situation['存在简历'] += 1
 
-        elif '登录状态已失效' in r:
+        elif '登录状态已失效' in success:
             msg = '登录状态已失效'
 
         else:
@@ -149,28 +151,21 @@ class downloader(object):
             self.upload_situation['上传失败'] += 1
         return msg
 
-    #启动上传程序
+    # 启动上传程序
     def up_data_program(self):
-        cwd = os.getcwd()
-        for root, dirs, files in os.walk(cwd + '\data-上传'):
+        for root, dirs, files in os.walk('.\data-上传'):
             for file in files:
-                self.url_all.append(os.path.join(root, file))
+                files=os.path.splitext(file)
+                splitext=['doc','docx','xls','xlsx','pdf','txt','html']
+                if files[1][1:] in splitext:
+                    dl.url_all.append(os.path.join(root, file))
 
         if len(dl.url_all) == 0:
             print('请放入上传文件')
             time.sleep(5)
 
         else:
-            try:
-                htmlf = open('cookie.txt', 'r', encoding='UTF-8')
-                self.cookie = htmlf.read()
-                htmlf.close()
-            except:
-                dl.get_cookies()
-                htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-                htmlf.write(self.cookie)
-                htmlf.close()
-
+            dl.get_cookies2()
             while True:
                 try:
                     for i in range(len(dl.url_all)):
@@ -178,99 +173,18 @@ class downloader(object):
                         data_report = dl.post_files(dl.url_all[i])
                         while data_report=='登录状态已失效':
                             print('----------《登录失效请重新登录账户》----------')
-                            dl.get_cookies()
-                            htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-                            htmlf.write(self.cookie)
-                            htmlf.close()
+                            dl.get_cookies2('登录失效')
                             data_report = dl.post_files(dl.url_all[i])
-
-                        print(data_report+ "："+ dl.url_all[i])
+                        print(data_report+ "：剩余"+ dl.get_score())
                 except Exception as e:
                     print(e)
                 finally:
                     print()
-                    print("上传成功：%d | 已存在相同简历：%d | 上传失败：%d"  % (dl.upload_situation['上传成功'], dl.upload_situation['已存在相同简历'],dl.upload_situation['上传失败']))
+                    print("上传成功：%d | 存在简历：%d | 上传失败：%d"  % (dl.upload_situation['上传成功'], dl.upload_situation['存在简历'],dl.upload_situation['上传失败']))
                     input("回车结束程序")
                     break
 
     '''--------------------转换程序--------------------'''
-
-    # 判断文件的类型
-    def file_name(self, file_dir):
-        for root, dirs, files in os.walk(file_dir):
-            if 'doc_cache' not in root:
-                for file in files:
-                    names = os.path.splitext(file)
-                    if names[1] == '.html':
-                        self.url_all.append(os.path.join(root, file))
-
-                    #旧版doc程序
-                    # elif names[1] == '.doc':
-                    #
-                    #     # 新建文件夹
-                    #     mkdir = os.path.join(root, 'doc_cache')
-                    #     isExists = os.path.exists(mkdir)
-                    #     if not isExists:
-                    #         os.makedirs(mkdir)
-                    #
-                    #     # 读取文件名称和改后缀名
-                    #     word_url_doc = os.path.join(root, file)
-                    #     word_url_html = os.path.join(root, 'doc_cache', names[0] + '.html')
-                    #     self.url_all.append(word_url_html)
-                    #     # print(word_url_html)
-                    #
-                    #     # 判断是否已经转换成html
-                    #     isExists2 = os.path.exists(word_url_html)
-                    #     if not isExists2:
-                    #         print('转换：' + word_url_doc)
-                    #         downloader.wordsToHtml(self, word_url_doc, word_url_html)
-
-                    elif names[1] == '.doc':
-                        self.url_all.append(os.path.join(root, file))
-
-                    else:
-                        self.conversion_situation['其他类型'] += 1
-                        print('其他类型：', os.path.join(root, file))
-
-    # 判断编码
-    def file_coding(self, file):
-        global htmlf
-        try:
-            htmlf = open(file, 'r', encoding="utf-8")
-            BeautifulSoup(htmlf, 'lxml')
-            return file, 'utf-8'
-        except:
-            try:
-                htmlf = open(file, 'r', encoding="gbk")
-                BeautifulSoup(htmlf, 'lxml')
-                return file, 'gbk'
-            except:
-                try:
-                    htmlf = open(file, 'r', encoding="UTF-16")
-                    BeautifulSoup(htmlf, 'lxml')
-                    return file, 'utf-16'
-                except:
-                    return file, 'utf-8'
-        finally:
-            htmlf.close()
-
-    # 转换doc/docx/mht格式成html
-    def wordsToHtml(self,word_url_old, word_url_new):
-        # global doc
-        # global word
-
-        # kwps.Application WPS接口转换
-        # wps.Application WPS接口转换
-        # word.Application office接口转换
-        try:
-            word = wc.Dispatch('word.Application')
-            doc = word.Documents.Open(word_url_old)
-            doc.SaveAs(word_url_new, 8)
-            doc.Close()
-            word.Quit()
-
-        except:
-            print('错误转换：', word_url_old)
 
     # csv模块导出csv
     def csv_to_csv(self, name,title, datas):
@@ -281,9 +195,6 @@ class downloader(object):
             # print(datas)
             for row in datas:
                 writer.writerow(row)
-        # # 清除缓存
-        # url.clear()
-        # datas.clear()
 
     # xlwt模块导出xls
     def xlwt_to_xls(self,name,title,datas):
@@ -299,11 +210,11 @@ class downloader(object):
 
         workbook.save(name+'.xls')
 
-    # 纷简历-3清洗程序
+    # 纷简历-3清洗程序 doc
     def get_url_fenjianli_3(self,url):
         try:
             # print(url)
-            dicts = dict.fromkeys(self.url_fenjianli_3_title, "")
+            dicts = dict.fromkeys(dl.url_fenjianli_3_title, "")
 
             doc_tables=Document(url).tables
 
@@ -480,17 +391,19 @@ class downloader(object):
             dicts['创建时间'] = time.strftime('%Y-%m-%d',time.localtime(time.time()))
 
             # print(dicts)
-            self.url_fenjianli_3_datas.append(dicts)
+            dl.url_fenjianli_3_datas.append(dicts)
         except:
-            self.conversion_situation['错误简历'] += 1
-            print('错误简历-纷简历-3：',url)
-        else:
-            self.conversion_situation['正确简历'] += 1
-            print('正确简历-纷简历-3：', url)
-            dl.up_mysql(dicts, 'fenjianli_doc')
-            # dicts['简历编号']
+            dl.conversion_situation['错误简历'] += 1
+            print('错误简历-纷简历-3：', os.path.basename(url))
 
-    # 纷简历-4清洗程序
+        else:
+            dl.conversion_situation['正确简历'] += 1
+            print('正确简历-纷简历-3：', os.path.basename(url))
+            if dl.sql_status==True:
+                dl.mysql_judge('fenjianli_id', 'insert', dicts)
+                dl.mysql_judge('fenjianli_doc', '', dicts)
+
+    # 纷简历-4清洗程序 html
     def get_url_fenjianli_4(self, url):
         try:
             htmlf = open(url, 'r', encoding='UTF-8')
@@ -721,13 +634,13 @@ class downloader(object):
             self.url_fenjianli_4_datas.append(dicts)
         except:
             self.conversion_situation['错误简历'] += 1
-            # self.false += 1
-            print('错误简历-纷简历-4：',url)
+            print('错误简历-纷简历-4：',os.path.basename(url))
         else:
             self.conversion_situation['正确简历'] += 1
-            # self.true += 1
-            print('正确简历-纷简历-4：', url)
-            dl.up_mysql(dicts, 'fenjianli_html')
+            print('正确简历-纷简历-4：', os.path.basename(url))
+            if dl.sql_status==True:
+                dl.mysql_judge('fenjianli_id', 'insert', dicts)
+                dl.mysql_judge('fenjianli_html', '', dicts)
 
     # 简易转换分类控制
     def get_task(self, name, get_url, url, title, datas):
@@ -740,76 +653,27 @@ class downloader(object):
         # 利用xlwt导出xls
         downloader.xlwt_to_xls(self, name, title, datas)
 
-    #上传到数据库里
-    def up_mysql(self,data,table_name):
-        data=list(data.values())
-        resume_id = data[1]
-        phone_number = data[4]
-
-        # table_name = 'fenjianli_html'  # 数据表名称
-        # table_name = 'fenjianli_doc'  # 数据表名称
-
-        if phone_number != '':
-            db = pymysql.connect(host="192.168.0.41", user="root", password="", db="it-data", port=3306,charset='utf8mb4')  # 连接数据库
-            cur = db.cursor(cursor=pymysql.cursors.DictCursor)  # 获取一个列表游标
-            # cur=db.cursor() # 获取一个游标
-
-            #ret1
-            cur.execute("select `手机号码` from {0} where `手机号码`='{1}'".format(table_name, phone_number))
-            ret1 = cur.fetchone()
-
-            if phone_number in str(ret1):
-                sql="DELETE FROM {0} where `手机号码`='{1}'".format(table_name,phone_number) # 删除数据
-                cur.execute(sql)
-                format = str(',%s' * len(data))[1:]
-                cur.execute('insert into {0} values({1})'.format(table_name, format), data)  # 插入数据
-            else:
-                format = str(',%s' * len(data))[1:]
-                cur.execute('insert into {0} values({1})'.format(table_name, format), data)  # 插入数据
-
-            # ret2
-            cur.execute("select `resume_id` from {0} where `resume_id`='{1}'".format('fenjianli_id', resume_id))
-            ret2 = cur.fetchone()
-
-            if ret2 == None:
-                downdate = time.strftime('%Y-%m-%d', time.localtime(time.time()))
-                upload = [resume_id, downdate, '转换', '{"keywords": "转换"}']
-                format = str(',%s' * len(upload))[1:]
-                cur.execute('insert into {0} values({1})'.format('fenjianli_id', format), upload)  # 插入数据
-
-
-            # 提交
-            db.commit()
-            # 关闭指针对象
-            cur.close()
-            # 关闭连接对象
-            db.close()
-
     # 启动转换程序
     def turn_data_program(self):
 
-        cwd = os.getcwd()
         # 启动文件地址提取和转换程序
-        dl.file_name(cwd + '\data-转换')
-        if len(dl.url_all) == 0:
+        for root, dirs, files in os.walk('.\data-转换'):
+            for file in files:
+                files=os.path.splitext(file)
+                if files[1][1:] == 'html':
+                    dl.url_fenjianli_4.append(os.path.join(root, file))
+
+                elif files[1][1:] == 'doc':
+                    dl.url_fenjianli_3.append(os.path.join(root, file))
+                else:
+                    dl.conversion_situation['其他类型'] += 1
+                    print('其他类型：', file)
+
+        if len(dl.url_fenjianli_4) == 0 or len(dl.url_fenjianli_4)== 0:
             print('请放入转换文件')
             time.sleep(5)
         else:
-            # 启动判断简历类型程序
-            for i in dl.url_all:
-                names = os.path.splitext(i)
-
-                # if names[1] == '.html':
-                #     dl.url_fenjianli_1.append(dl.file_coding(i))
-                # elif 'doc_cache' in i:
-                #     dl.url_fenjianli_2.append(dl.file_coding(i))
-
-                if names[1] == '.html':
-                    dl.url_fenjianli_4.append(i)
-
-                elif names[1] == '.doc':
-                    dl.url_fenjianli_3.append(i)
-
+            dl.account = '转换'
             if len(dl.url_fenjianli_3) != 0:
                 dl.get_task('纷简历-3', dl.get_url_fenjianli_3, dl.url_fenjianli_3, dl.url_fenjianli_3_title,dl.url_fenjianli_3_datas)
 
@@ -818,17 +682,14 @@ class downloader(object):
 
             print()
             print("正确数量：%d | 错误数量：%d | 其他类型：%d" % (dl.conversion_situation['正确简历'], dl.conversion_situation['错误简历'], dl.conversion_situation['其他类型']))
-            input("回车结束程序")
-            # print()
-            # print('五秒后自动结束程序')
-            # time.sleep(5)
+            # input("回车结束程序")
 
     '''--------------------下载程序--------------------'''
 
-    #搜索条件模块
+    # 搜索条件模块
     def search_condition(self):
-        self.account=input('下载账号：')
-        self.data_D_max=int(input('下载数量：'))
+        dl.account=input('下载账号：')
+        dl.data_D_max=int(input('下载数量：'))
 
         #条件
         dicts = {}
@@ -858,9 +719,9 @@ class downloader(object):
 
         dicts.update({'hideDownloaded': 1})
         dicts.update({'page': 1})
-        self.condition = dicts
+        dl.condition = dicts
 
-    #获得简历ID
+    # 获得简历ID
     def get_resume_id(self,page):
         url = 'http://www.fenjianli.com/search/list'
         cookies = {'fid': dl.cookie}
@@ -876,10 +737,10 @@ class downloader(object):
             'Referer': 'http://www.fenjianli.com/search',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
         }
-        self.condition['page']=page
-        payload=self.condition
-
+        dl.condition['page']=page
+        payload=dl.condition
         html = requests.post(url, data=payload, cookies=cookies,headers=headers).text
+
         for i in json.loads(html)['data']['data']:
             if dl.data_D_min < dl.data_D_max:
                 dl.search_mysql(i['es_id'])
@@ -887,61 +748,61 @@ class downloader(object):
             else:
                 break
 
-    #判断ID是否存在
+    # 判断ID是否存在
     def search_mysql(self,resume_id):
-        table_name = 'fenjianli_id'  # 数据表名称
-        downdate=time.strftime('%Y-%m-%d', time.localtime(time.time()))
 
-        db = pymysql.connect(host="192.168.0.41", user="root", password="", db="it-data", port=3306,charset='utf8mb4')  # 连接数据库
-        # cur = db.cursor(cursor=pymysql.cursors.DictCursor)  # 获取一个列表游标
-        cur = db.cursor()  # 获取一个游标
-        cur.execute("select resume_id from {0} where resume_id='{1}'".format(table_name, resume_id))
-        select_id = cur.fetchone()
-        # print(select_id)
-        if select_id==None:
+        #检查数据库是否存在这个简历ID
+        if dl.sql_status == True:
+            judge = dl.mysql_judge('fenjianli_id', 'select', {'resume_id': resume_id})
+        else:
+            judge = None
+
+        if judge==None:
+
             # 下载联系方式状态:剩余积分不足/您已经下载过了/success
-
             exchange = dl.exchange(resume_id)
-            if exchange != '剩余积分不足':
-                print('未下载简历',resume_id)
-                if self.data_D_min != 0:
+
+            if exchange == 'success':
+                print('未下载简历：剩下',dl.get_score())
+
+                if dl.data_D_min != 0:
                     time.sleep(random.randint(10, 50)/10)
 
                 #下载html文件
-                dl.down_data(resume_id)
+                dl.download_html(resume_id)
                 judge_result=dl.down_judge(resume_id)
+
+                # 下载doc文件
+                dl.download_doc(resume_id)
 
                 #上传数据库
                 if judge_result=='成功':
 
-                    # 下载doc文件
-                    dl.download_doc(resume_id)
+                    # 上传ID到数据库里
+                    if dl.sql_status == True:
+                        dl.mysql_judge('fenjianli_id', 'insert', {'resume_id': resume_id})
 
-                    upload = [resume_id, downdate, self.account,str(json.dumps(self.condition,ensure_ascii=False))]
-                    # # print(upload)
-                    format = str(',%s' * len(upload))[1:]
-                    cur.execute('insert into {0} values({1})'.format(table_name, format), upload)  # 插入数据
-                    # dl.get_url_fenjianli_4(os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html'))) #下载并上传数据
-                    self.data_D_min+=1
-                    self.download_situation['下载成功'] += 1
+                    # 下载并上传数据
+                    # dl.get_url_fenjianli_3(os.path.getsize(os.path.join('data-下载\doc\\', resume_id + '.doc')))
+                    # dl.get_url_fenjianli_4(os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html')))
+
+                    dl.data_D_min+=1
+                    dl.download_situation['下载成功'] += 1
+
                 else:
-                    print('下载失败简历', resume_id)
-                    self.download_situation['下载失败'] += 1
+                    print('下载失败简历：剩下', dl.get_score())
+                    dl.download_situation['下载失败'] += 1
+
+            elif exchange == '您已经下载过了':
+                print('已下载简历：剩下', dl.get_score())
+
             else:
                 print('账号积分不足，请上传简历补充积分')
-                self.data_D_min = self.data_D_max
+                dl.data_D_min = dl.data_D_max
         else:
-            print('已下载简历',resume_id)
+            print('已下载简历：剩下',dl.get_score())
 
-
-        # 提交
-        db.commit()
-        # 关闭指针对象
-        cur.close()
-        # 关闭连接对象
-        db.close()
-
-    #下载联系方式
+    # 下载联系方式
     def exchange(self,resume_id):
         url = 'http://www.fenjianli.com/resume/download'
         cookies = {'fid': dl.cookie}
@@ -959,13 +820,14 @@ class downloader(object):
         }
         payload={'resumeId':resume_id}
         html = requests.post(url, data=payload, cookies=cookies,headers=headers).text
+
         htmlf=json.loads(html)['msg']
-        # print(htmlf)
         return htmlf
 
-    #下载简历html数据
-    def down_data(self,resume_id):
+    # 下载简历html数据
+    def download_html(self,resume_id):
         url = 'http://www.fenjianli.com/resume/resumeTemplate'
+        cookies = {'fid': dl.cookie}
         headers={
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'Accept-Encoding': 'gzip, deflate',
@@ -976,16 +838,13 @@ class downloader(object):
             'Upgrade-Insecure-Requests': '1',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
         }
-        cookies = {'fid': self.cookie}
         payload = {'resumeId': resume_id}
         html = requests.get(url, params=payload, cookies=cookies,headers=headers).text
 
-        # 下载简历
-        htmlf = open('data-下载\html\\' + resume_id + '.html', 'w', encoding='UTF-8')
-        htmlf.write(html)
-        htmlf.close()
+        with open('data-下载\html\\' + resume_id + '.html', 'w', encoding='UTF-8') as code:
+            code.write(html)
 
-    #下载简历doc数据
+    # 下载简历doc数据
     def download_doc(self,resume_id):
         url = 'http://www.fenjianli.com/resume/export'
         cookies = {'fid': dl.cookie}
@@ -1003,27 +862,24 @@ class downloader(object):
         }
         payload={'resumeId':resume_id,'type':'word'}
         html = requests.post(url, data=payload, cookies=cookies,headers=headers)
-        # print(html)
+
         with open('data-下载\doc\\' + resume_id + '.doc', 'wb') as code:
             code.write(html.content)
 
-    #判断文件是否成功下载
+    # 判断文件是否成功下载
     def down_judge(self,resume_id):
         size = os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html'))
 
         if size == 10271:
             print('----------《登录失效请重新登录账户》----------')
-            dl.get_cookies()
-            htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-            htmlf.write(dl.cookie)
-            htmlf.close()
-            dl.down_data(resume_id)
+            dl.get_cookies2('登录失效')
+            dl.download_html(resume_id)
             # time.sleep(random.randint(100, 200) / 10)
 
         cycle_number = 0
         while size == 5298 and cycle_number <= 3:
             time.sleep(30)
-            dl.down_data(resume_id)
+            dl.download_html(resume_id)
             size = os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html'))
             cycle_number += 1
 
@@ -1032,17 +888,10 @@ class downloader(object):
         else:
             return '失败'
 
-    #启动下载程序
+    # 启动下载程序
     def down_data_program(self):
-        try:
-            htmlf = open('cookie.txt', 'r', encoding='UTF-8')
-            dl.cookie = htmlf.read()
-            htmlf.close()
-        except:
-            dl.get_cookies()
-            htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-            htmlf.write(dl.cookie)
-            htmlf.close()
+
+        dl.get_cookies2()
 
         # 确认条件
         while True:
@@ -1055,16 +904,13 @@ class downloader(object):
         #获得每页ID
         for i in range(1,135):
             # print(i)
-            if self.data_D_min <dl.data_D_max:
+            if dl.data_D_min <dl.data_D_max:
                 try:
                     dl.get_resume_id(i)
                     time.sleep(random.randint(10, 30) /10)
                 except:
                     print('----------《登录失效请重新登录账户》----------')
-                    dl.get_cookies()
-                    htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-                    htmlf.write(dl.cookie)
-                    htmlf.close()
+                    dl.get_cookies2('登录失效')
                     dl.get_resume_id(i)
                     time.sleep(random.randint(10, 30)/10)
             else:
@@ -1072,69 +918,17 @@ class downloader(object):
 
         #下载结果报告
         print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
-        input("回车结束程序")
-
-    '''--------------------测试程序--------------------'''
-
-    #筛选获得ID_下载页
-    def get_ID2(self,page):
-        url='http://www.fenjianli.com/resume/lpDownLoadResumeList'
-        htmlf = open('cookie.txt', 'r', encoding='UTF-8')
-        self.cookie = htmlf.read()
-        htmlf.close()
-        # url = 'http://www.fenjianli.com/search/list'
-        cookies = {'fid': self.cookie}
-        payload = {
-            'page': page,
-            'name': '',
-            'job': '',
-            'company': '',
-            'order': 'desc'
-        }
-
-        htmlf = requests.get(url, params=payload, cookies=cookies).text
-        soup = BeautifulSoup(htmlf, 'lxml')
-        soup=soup.select('div[class="max-width resume-box"] div[class="resume-list"]')
-        for i in soup:
-            # print(i.get('data-id'))
-
-            if dl.data_D_min<dl.data_D_max:
-                dl.search_mysql_id(i.get('data-id'))
-            else:
-                break
-
-            htmlf = open('urlIDs.txt', 'a', encoding='UTF-8')
-            htmlf.write(i.get('data-id') + '\n')
-            htmlf.close()
-
-    def search_mysql_id(self,resume_id):
-        table_name = 'fenjianli_html'  # 数据表名称
-
-        db = pymysql.connect(host="192.168.0.41", user="root", password="", db="it-data", port=3306,charset='utf8mb4')  # 连接数据库
-        # cur = db.cursor(cursor=pymysql.cursors.DictCursor)  # 获取一个列表游标
-        cur = db.cursor()  # 获取一个游标
-        cur.execute("select 简历编号 from {0} where 简历编号='{1}'".format(table_name, resume_id))
-        select_id = cur.fetchone()
-
-        if resume_id == None:
-            print('没有',resume_id)
-            dl.down_data(resume_id)
-
-        else:
-            print('有',resume_id)
-
-        # 提交
-        db.commit()
-        # 关闭指针对象
-        cur.close()
-        # 关闭连接对象
-        db.close()
+        # input("回车结束程序")
 
 if __name__=='__main__':
 
     dl = downloader()
     print('请选择模式：')
     print('《转换》输入"1" | 《上传》输入"2" | 《下载》输入"3"')
+    dl.makedirs('.\data-上传')
+    dl.makedirs('.\data-下载\html')
+    dl.makedirs('.\data-下载\doc')
+    dl.makedirs('.\data-转换')
     select=input()
     if select=='1':
         dl.turn_data_program()
