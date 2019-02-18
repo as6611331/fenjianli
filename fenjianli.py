@@ -27,6 +27,10 @@ class downloader(object):
         self.url_fenjianli_4_title=['更新时间','简历编号','姓名','性别','手机号码','年龄','电子邮件','教育程度','工作年限','婚姻状况','职业状态','国籍','所在地','户籍','期望行业','期望职位','期望地点','期望薪资','工作经历','项目经历','教育经历','培训经历','专业技能','语言能力','自我评价','所获证书','简历来源','创建时间']
         self.url_fenjianli_4_datas=[]
 
+        # 新猎场导入用
+        self.url_xinliechang_1_title = ['姓名','手机号','期望职业','性别','年龄','期望薪资','工作年限','学历','现居住地','期望地点','电子邮箱','目前状态','自我评价','工作经历','创建时间']
+        self.url_xinliechang_1_datas = []
+
         self.conversion_situation={'正确简历':0,'错误简历':0,'其他类型':0}
         self.upload_situation={'上传成功':0,'存在简历':0,'上传失败':0}
         self.download_situation = {'下载成功': 0,'下载失败': 0}
@@ -87,6 +91,7 @@ class downloader(object):
                 time.sleep(1)
                 try:
                     dl.cookie = diver.get_cookies()[1]['value']
+                    print(dl.cookie)
                     break
                 except:
                     pass
@@ -137,27 +142,27 @@ class downloader(object):
         success=str(json.loads(success.text))
         if '上传成功' in success:
             msg = '上传成功'
-            self.upload_situation['上传成功']+=1
+            dl.upload_situation['上传成功']+=1
 
         elif '已存在相同简历' in success:
             msg = '存在简历'
-            self.upload_situation['存在简历'] += 1
+            dl.upload_situation['存在简历'] += 1
 
         elif '登录状态已失效' in success:
             msg = '登录状态已失效'
 
         else:
             msg = '上传失败'
-            self.upload_situation['上传失败'] += 1
+            dl.upload_situation['上传失败'] += 1
         return msg
 
     # 启动上传程序
     def up_data_program(self):
         for root, dirs, files in os.walk('.\data-上传'):
             for file in files:
-                files=os.path.splitext(file)
-                splitext=['doc','docx','xls','xlsx','pdf','txt','html']
-                if files[1][1:] in splitext:
+                files=os.path.splitext(file)[1]
+                splitext=['.doc','.docx','.xls','.xlsx','.pdf','.txt','.html']
+                if files in splitext:
                     dl.url_all.append(os.path.join(root, file))
 
         if len(dl.url_all) == 0:
@@ -395,10 +400,10 @@ class downloader(object):
         except:
             dl.conversion_situation['错误简历'] += 1
             print('错误简历-纷简历-3：', os.path.basename(url))
-
         else:
             dl.conversion_situation['正确简历'] += 1
             print('正确简历-纷简历-3：', os.path.basename(url))
+            dl.get_url_xinliechang_1(dicts)
             if dl.sql_status==True:
                 dl.mysql_judge('fenjianli_id', 'insert', dicts)
                 dl.mysql_judge('fenjianli_doc', '', dicts)
@@ -631,16 +636,64 @@ class downloader(object):
             dicts['创建时间'] = time.strftime('%Y-%m-%d',time.localtime(time.time()))
 
             # print(dicts)
-            self.url_fenjianli_4_datas.append(dicts)
+            dl.url_fenjianli_4_datas.append(dicts)
         except:
-            self.conversion_situation['错误简历'] += 1
+            dl.conversion_situation['错误简历'] += 1
             print('错误简历-纷简历-4：',os.path.basename(url))
         else:
-            self.conversion_situation['正确简历'] += 1
+            dl.conversion_situation['正确简历'] += 1
             print('正确简历-纷简历-4：', os.path.basename(url))
+            dl.get_url_xinliechang_1(dicts)
             if dl.sql_status==True:
                 dl.mysql_judge('fenjianli_id', 'insert', dicts)
                 dl.mysql_judge('fenjianli_html', '', dicts)
+
+    # 新猎场-1导入转换
+    def get_url_xinliechang_1(self, data):
+        dicts = dict.fromkeys(dl.url_xinliechang_1_title, '')
+        dicts['姓名']= data['姓名']
+        dicts['手机号'] = data['手机号码']
+        dicts['性别'] = data['性别']
+        dicts['年龄'] = data['年龄'].replace('岁','')
+        dicts['期望薪资'] = data['期望薪资']
+        dicts['工作年限'] = data['工作年限']
+        try:
+            dicts['期望地点'] =  ','.join(json.loads(data['期望地点']))
+        except:
+            pass
+        dicts['自我评价'] = data['自我评价']
+        try:
+            # html
+            try:
+                dicts['期望职业'] = ','.join(json.loads(data['期望职位']))
+            except:
+                pass
+            dicts['学历'] = data['教育程度']
+            dicts['现居住地'] = data['所在地']
+            dicts['电子邮箱'] = data['电子邮件']
+            dicts['目前状态'] = data['职业状态']
+        except:
+            # doc
+            try:
+                dicts['期望职业'] = ','.join(json.loads(data['期望职业']))
+            except:
+                pass
+            dicts['学历'] = data['学历']
+            dicts['现居住地'] = data['现居住地']
+            dicts['电子邮箱'] = data['电子邮箱']
+            dicts['目前状态'] = data['目前状态']
+
+        gzjl=eval(data['工作经历'])
+        gzjl_data=''
+        n=1
+        for i in gzjl:
+            gzjl_data=gzjl_data+'{0}.{1}-{2}职位:{3}'.format(n,i['任职时间'].replace('.','/'),i['公司'],i['职位'])
+            n+=1
+        dicts['工作经历'] = gzjl_data
+
+        dicts['创建时间'] = data['创建时间']
+        dl.url_xinliechang_1_datas.append(dicts)
+        # print(dicts)
 
     # 简易转换分类控制
     def get_task(self, name, get_url, url, title, datas):
@@ -648,41 +701,45 @@ class downloader(object):
             get_url(i)
 
         # 利用csv模块导出csv
-        # downloader.csv_to_csv(self, name, title, datas)
+        # dl.csv_to_csv(name, title, datas)
 
         # 利用xlwt导出xls
-        downloader.xlwt_to_xls(self, name, title, datas)
+        dl.xlwt_to_xls(name, title, datas)
 
     # 启动转换程序
     def turn_data_program(self):
-
         # 启动文件地址提取和转换程序
         for root, dirs, files in os.walk('.\data-转换'):
             for file in files:
-                files=os.path.splitext(file)
-                if files[1][1:] == 'html':
+                files=os.path.splitext(file)[1]
+                if files == '.html':
                     dl.url_fenjianli_4.append(os.path.join(root, file))
 
-                elif files[1][1:] == 'doc':
+                elif files == '.doc':
                     dl.url_fenjianli_3.append(os.path.join(root, file))
                 else:
                     dl.conversion_situation['其他类型'] += 1
                     print('其他类型：', file)
 
-        if len(dl.url_fenjianli_4) == 0 or len(dl.url_fenjianli_4)== 0:
+        if len(dl.url_fenjianli_3) == 0 and len(dl.url_fenjianli_4) == 0:
             print('请放入转换文件')
             time.sleep(5)
         else:
             dl.account = '转换'
+
             if len(dl.url_fenjianli_3) != 0:
                 dl.get_task('纷简历-3', dl.get_url_fenjianli_3, dl.url_fenjianli_3, dl.url_fenjianli_3_title,dl.url_fenjianli_3_datas)
 
             if len(dl.url_fenjianli_4) != 0:
                 dl.get_task('纷简历-4', dl.get_url_fenjianli_4, dl.url_fenjianli_4, dl.url_fenjianli_4_title,dl.url_fenjianli_4_datas)
 
+            # 新猎场导入用
+            if len(dl.url_xinliechang_1_datas) != 0:
+                dl.xlwt_to_xls('新猎场导入', dl.url_xinliechang_1_title, dl.url_xinliechang_1_datas)
+
             print()
             print("正确数量：%d | 错误数量：%d | 其他类型：%d" % (dl.conversion_situation['正确简历'], dl.conversion_situation['错误简历'], dl.conversion_situation['其他类型']))
-            # input("回车结束程序")
+            input("回车结束程序")
 
     '''--------------------下载程序--------------------'''
 
@@ -918,7 +975,7 @@ class downloader(object):
 
         #下载结果报告
         print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
-        input("回车结束程序")
+        # input("回车结束程序")
 
 if __name__=='__main__':
 
