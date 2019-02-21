@@ -2,6 +2,7 @@ import requests, time, os, random,re,csv,xlwt,json,pymysql
 from docx import Document
 from bs4 import BeautifulSoup
 from selenium import webdriver
+import threading
 
 class downloader(object):
     def __init__(self):
@@ -137,23 +138,26 @@ class downloader(object):
         name = str(random.randint(10000000, 100000000))+os.path.splitext(path)[-1]
         url = 'http://www.fenjianli.com/share/upload'
         cookies = {'fid': dl.cookie}
-        files = {'file': (name, open(path, 'rb'), 'application/msword', {'Expires': '0'})}
-        success = requests.post(url, files=files, cookies=cookies)
-        success=str(json.loads(success.text))
-        if '上传成功' in success:
-            msg = '上传成功'
-            dl.upload_situation['上传成功']+=1
+        with open(path, 'rb') as f:
 
-        elif '已存在相同简历' in success:
-            msg = '存在简历'
-            dl.upload_situation['存在简历'] += 1
+            files = {'file': (name, f, 'application/msword', {'Expires': '0'})}
+            success = requests.post(url, files=files, cookies=cookies)
+            success=str(json.loads(success.text))
+            if '上传成功' in success:
+                msg = '上传成功'
+                dl.upload_situation['上传成功'] += 1
 
-        elif '登录状态已失效' in success:
-            msg = '登录状态已失效'
+            elif '已存在相同简历' in success:
+                msg = '存在简历'
+                dl.upload_situation['存在简历'] += 1
 
-        else:
-            msg = '上传失败'
-            dl.upload_situation['上传失败'] += 1
+            elif '登录状态已失效' in success:
+                msg = '登录状态已失效'
+
+            else:
+                msg = '上传失败'
+                dl.upload_situation['上传失败'] += 1
+        os.remove(path)
         return msg
 
     # 启动上传程序
@@ -411,8 +415,8 @@ class downloader(object):
     # 纷简历-4清洗程序 html
     def get_url_fenjianli_4(self, url):
         try:
-            htmlf = open(url, 'r', encoding='UTF-8')
-            soup = BeautifulSoup(htmlf, 'lxml')
+            with open(url, 'r', encoding='UTF-8') as f:
+                soup = BeautifulSoup(f, 'lxml')
             dicts = dict.fromkeys(dl.url_fenjianli_4_title, '')
             try:
                 dicts['简历编号'] = soup.find('input').get('value')
@@ -770,6 +774,10 @@ class downloader(object):
         if sex != '':
             dicts.update({'sex': int(sex)})
 
+        salarys = input('期望薪资：')
+        if salarys != '':
+            dicts.update({'salarys': int(salarys)})
+
         update = input('更新日期：')
         if update != '':
             dicts.update({'update': int(update)})
@@ -975,7 +983,7 @@ class downloader(object):
 
         #下载结果报告
         print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
-        # input("回车结束程序")
+        input("回车结束程序")
 
 if __name__=='__main__':
 
