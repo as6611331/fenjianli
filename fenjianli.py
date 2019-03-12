@@ -934,12 +934,13 @@ class downloader(object):
                 if os.path.exists('config.ini') == True:
                     dl.get_conf('上传')
                 dl.get_cookies2()
+                print('可上传数量：' + str(len(dl.url_all)) + '\n要上传数量：' + str (dl.data_U_max))
 
                 # 多线程
                 pool = ThreadPoolExecutor(5)
                 for data_report_1,data_report_2 in pool.map(dl.post_files, dl.url_all):
                     if dl.data_U_min < dl.data_U_max:
-                        print(data_report_1 + "：剩余" + dl.get_score() + ' 上传成功' + str(dl.data_U_min))
+                        print(data_report_1 + "：剩余" + dl.get_score() + ' 上传成功' + str (dl.data_U_min))
                         if data_report_1 == '登录状态已失效':
                             print('----------《登录失效请重新登录账户》----------')
                             break
