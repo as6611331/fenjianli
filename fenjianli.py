@@ -1,8 +1,10 @@
-import requests, time, os, random,re,csv,xlwt,json,pymysql
+import requests, time, os, random,re,csv,xlwt,json,pymysql,datetime
 from docx import Document
-from win32com import client as wc
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from configparser import ConfigParser
+from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor #线程池，进程池
+from shutil import copyfile
 
 class downloader(object):
     def __init__(self):
@@ -12,230 +14,184 @@ class downloader(object):
         self.cookie = ''
         self.data_D_max = 100
         self.data_D_min = 0
-        self.data_U_max = 440
+        self.data_U_max = 300
+        self.data_U_min = 0
         self.condition={}
         self.account=''
+        self.account_password=''
 
+        # 数据库启动
+        self.sql_status=True
+        self.host='192.168.0.41'
+        self.user='root'
+        self.password=''
+        self.db='it-data'
+        self.port=3306
+        self.charset='utf8mb4'
 
-        # 纷简历1
-        self.url_fenjianli_1 =[]
-        self.url_fenjianli_1_title = ('更新时间','姓名','手机号码','电子邮件','工作年限','职业状态','国籍','性别','年龄','教育程度','婚姻状况','所在地','户籍','所在行业','公司名称','所任职位','目前薪资','期望地点','期望薪资','工作经历','文件位置')
-        self.url_fenjianli_1_datas = []
-
-        # 纷简历2
-        self.url_fenjianli_2 =[]
-        self.url_fenjianli_2_title = ('更新时间', '姓名','性别','手机号','年龄','电子邮箱','学历','婚姻状况','工作年限','现居住地','户籍','期望行业','期望职业','期望地点','期望薪资','工作性质','目前状态','文件位置')
-        self.url_fenjianli_2_datas = []
-
-        # 纷简历3
+        # 纷简历-3 doc
         self.url_fenjianli_3 = []
         self.url_fenjianli_3_title=['简历更新时间','简历编号','姓名','性别','手机号码','年龄','电子邮箱','学历','婚姻状况','工作年限','现居住地','户籍','期望行业','期望职业','期望地点','期望薪资','工作性质','目前状态','自我评价','工作经历','项目经历','教育经历','语言能力','培训经历','专业技能','证书','简历来源','创建时间']
         self.url_fenjianli_3_datas=[]
 
-        # 纷简历4
+        # 纷简历-4 html 最详细
         self.url_fenjianli_4 = []
         self.url_fenjianli_4_title=['更新时间','简历编号','姓名','性别','手机号码','年龄','电子邮件','教育程度','工作年限','婚姻状况','职业状态','国籍','所在地','户籍','期望行业','期望职位','期望地点','期望薪资','工作经历','项目经历','教育经历','培训经历','专业技能','语言能力','自我评价','所获证书','简历来源','创建时间']
         self.url_fenjianli_4_datas=[]
 
+        # 新猎场-1
+        self.url_xinliechang_1_title = ['姓名','手机号','期望职业','性别','年龄','期望薪资','工作年限','学历','现居住地','期望地点','电子邮箱','目前状态','自我评价','工作经历','创建时间']
+        self.url_xinliechang_1_datas = []
+
+        # 新猎场-2
+        self.url_xinliechang_2_title = ["简历名称","姓名","性别","出生年月","身高","籍贯","婚否","工作经验","学历","职位性质","意向行业","意向工作地区","意向薪资","教育经历","工作经历","语言能力","证书","手机","邮箱","居住地","意向职位","自我描述","添加时间","渠道来源","专业技能","培训经历","目前状态","项目经历",]
+        self.url_xinliechang_2_datas = []
+
+        # 汇总数据
+        self.days = []
+        self.numbers = 0
+        self.statistics_title = {'日期':0,'北京': 110000, '深圳': 440300, '上海': 310000, '广州': 440100, '成都': 510100, '杭州': 330100, '重庆': 500000,'天津': 120000}
+        # self.statistics_title = {'日期':0,'天津': 120000}
+        self.statistics_data = []
+
         self.conversion_situation={'正确简历':0,'错误简历':0,'其他类型':0}
-        self.upload_situation={'上传成功':0,'已存在相同简历':0,'上传失败':0}
+        self.upload_situation={'上传成功':0,'存在简历':0,'上传失败':0}
         self.download_situation = {'下载成功': 0,'下载失败': 0}
 
+    # 检查数据库重复
+    def mysql_judge(self,table_name,operating,data):
+        db = pymysql.connect(host=dl.host, user=dl.user, password=dl.password, db=dl.db, port=dl.port,charset=dl.charset)  # 连接数据库
+        cur=db.cursor() # 获取一个游标
+
+        if ('resume_id' in data.keys()):
+            resume_id = data['resume_id']
+        else:
+            resume_id = data['简历编号']
+            phone_number = data['手机号码']
+
+        if table_name=='fenjianli_id':
+            cur.execute("select `resume_id` from {0} where `resume_id`='{1}'".format('fenjianli_id', resume_id))
+            ret = cur.fetchone()
+
+            if operating=='select':
+                return ret
+            elif operating=='insert':
+                if ret == None:
+                    downdate = time.strftime('%Y-%m-%d', time.localtime(time.time()))
+                    upload = [resume_id, downdate, dl.account, str(json.dumps(dl.condition, ensure_ascii=False))]
+                    format = str(',%s' * len(upload))[1:]
+                    cur.execute('insert into {0} values({1})'.format('fenjianli_id', format), upload)  # 插入数据
+
+        elif table_name=='fenjianli_html' or table_name=='fenjianli_doc':
+            cur.execute("select `手机号码` from {0} where `手机号码`='{1}'".format(table_name, phone_number))
+            ret = cur.fetchone()
+            if phone_number in str(ret):
+                sql="DELETE FROM {0} where `手机号码`='{1}'".format(table_name,phone_number) # 删除数据
+                cur.execute(sql)
+                format = str(',%s' * len(data))[1:]
+                cur.execute('insert into {0} values({1})'.format(table_name, format), list(data.values()))  # 插入数据
+            else:
+                format = str(',%s' * len(data))[1:]
+                cur.execute('insert into {0} values({1})'.format(table_name, format), list(data.values()))  # 插入数据
+
+        # 提交
+        db.commit()
+        # 关闭指针对象
+        cur.close()
+        # 关闭连接对象
+        db.close()
+
     # 获得cookie
-    def get_cookies(self):
-        login = 'http://www.fenjianli.com/login'
-        diver = webdriver.Chrome()
-        diver.get(login)
-        start_time = time.time()
-        while True:
-            # #超过120秒就结束进程
-            # if time.time() - start_time > 120:
-            #     break
-            time.sleep(1)
-            try:
-                self.cookie = diver.get_cookies()[1]['value']
-                # print(diver.get_cookies())
-                break
-            except:
-                pass
-        diver.quit()
+    def get_cookies2(self,status=''):
 
-    '''--------------------上传程序--------------------'''
+        cookie_status=os.path.isfile(".\cookie.txt")
 
-    #上传文件
-    def post_files(self,path):
+        if cookie_status==False or status=='登录失效':
+            login = 'http://www.fenjianli.com/login'
+            diver = webdriver.Chrome()
+            diver.get(login)
+            diver.find_element_by_id('linkPwd').click()
+            diver.find_element_by_name('partner').send_keys(dl.account)
+            diver.find_element_by_name('pwd').send_keys(dl.account_password)
+            if dl.account_password != '':
+                time.sleep(0.5)
+                diver.find_element_by_css_selector("button[data-type=\"pwd-login\"]").click()
 
-        #给个随机文件名
-        name = str(random.randint(10000000, 100000000))+os.path.splitext(path)[-1]
+            while True:
+                time.sleep(1)
+                try:
+                    dl.cookie = diver.get_cookies()[1]['value']
+                    print(dl.cookie)
+                    break
+                except:
+                    pass
+            diver.quit()
+            with open('cookie.txt', 'w', encoding='UTF-8') as f:
+                f.write(dl.cookie)
+        else:
+            with open('cookie.txt', 'r', encoding='UTF-8') as f:
+                dl.cookie = f.read()
 
-        url = 'http://www.fenjianli.com/share/upload'
-
+    # 读取下载剩余简历数
+    def get_score(self):
+        url = 'http://www.fenjianli.com/user'
         headers = {
-            'Accept': '*/*',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
             'Accept-Encoding': 'gzip, deflate',
             'Accept-Language': 'zh-CN,zh;q=0.9',
             'Connection': 'keep-alive',
-            # 'Content-Length': '12097',
-            # 'Content-Type': 'multipart/form-data',
+            'Content-Length': '0',
             'Host': 'www.fenjianli.com',
             'Origin': 'http://www.fenjianli.com',
             'Referer': 'http://www.fenjianli.com/share',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
+            'X-Requested-With': 'XMLHttpRequest',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36',
         }
+        cookies = {'fid': dl.cookie}
+        html = requests.post(url, cookies=cookies, headers=headers)
+        html = json.loads(html.text)
+        htmls = str(html['data']['usable_download_time'])
+        return htmls
 
-        cookies = {'fid': self.cookie}
+    # 自动新建文件夹
+    def makedirs(self,path):
+        if not os.path.exists(path):
+            os.makedirs(path)
 
-        # files = {'file': (name,open(path, 'rb'))}
-        # r = requests.post(url, files=files, cookies=cookies, headers=headers)
-        files = {'file': (name, open(path, 'rb'), 'application/msword', {'Expires': '0'})}
-        r = requests.post(url, files=files, cookies=cookies)
-        r=str(json.loads(r.text))
-        # print(r)
-        if '上传成功' in r:
-            msg = '上传成功'
-            self.upload_situation['上传成功']+=1
+    # 读取配置
+    def get_conf(self,operating=''):
+        cp = ConfigParser()
+        cp.read(".\config.ini",encoding='utf-8-sig')
 
-        elif '已存在相同简历' in r:
-            msg = '已存在相同简历'
-            self.upload_situation['已存在相同简历'] += 1
+        # 读取数据库信息
+        dl.sql_status = True if cp.get("mysql_db", "sql_status")=='True' else False
+        dl.host = cp.get("mysql_db", "host")
+        dl.port = int(cp.getint("mysql_db", "port"))
+        dl.db = cp.get("mysql_db", "db")
+        dl.user = cp.get("mysql_db", "user")
+        dl.password = cp.get("mysql_db", "password")
+        dl.charset = cp.get("mysql_db", "charset")
 
-        elif '登录状态已失效' in r:
-            msg = '登录状态已失效'
+        # 下载条件数据
+        if operating=='下载':
+            dicts={}
+            dl.account = cp.get("search_condition", "account")
+            dl.account_password = cp.get("search_condition", "account_password")
+            dl.data_D_max = int(cp.get("search_condition", "data_D_max"))
+            for i in ['keywords','city','age','degree','sex','salarys','update','hideDownloaded','page']:
+                data=cp.get("search_condition", i)
+                if data != '':
+                    dicts.update({i: data})
+            dl.condition = dicts
 
-        else:
-            msg = '上传失败'
-            self.upload_situation['上传失败'] += 1
-        return msg
+            print('下载账号：{0} 下载数量：{1} 下载条件：{2}'.format(dl.account,dl.data_D_max,dl.condition))
 
-    #启动上传程序
-    def up_data_program(self):
-        cwd = os.getcwd()
-        for root, dirs, files in os.walk(cwd + '\data-上传'):
-            for file in files:
-                self.url_all.append(os.path.join(root, file))
-
-        if len(dl.url_all) == 0:
-            print('请放入上传文件')
-            time.sleep(5)
-
-        # elif dl.cookie == "":
-        #     print('------登录失败------')
-
-        else:
-            try:
-                htmlf = open('cookie.txt', 'r', encoding='UTF-8')
-                self.cookie = htmlf.read()
-                htmlf.close()
-            except:
-                dl.get_cookies()
-                htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-                htmlf.write(self.cookie)
-                htmlf.close()
-
-            # print(dl.cookie)
-            while True:
-                try:
-                    for i in range(len(dl.url_all)):
-                        time.sleep(random.randint(10, 20) / 10)
-                        data_report = dl.post_files(dl.url_all[i])
-                        while data_report=='登录状态已失效':
-                            print('----------《登录失效请重新登录账户》----------')
-                            dl.get_cookies()
-                            htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-                            htmlf.write(self.cookie)
-                            htmlf.close()
-                            data_report = dl.post_files(dl.url_all[i])
-
-                        print(data_report+ "："+ dl.url_all[i])
-                except Exception as e:
-                    print(e)
-                finally:
-                    print()
-                    print("上传成功：%d | 已存在相同简历：%d | 上传失败：%d"  % (dl.upload_situation['上传成功'], dl.upload_situation['已存在相同简历'],dl.upload_situation['上传失败']))
-                    input("回车结束程序")
-                    # print()
-                    # print('五秒后自动结束程序')
-                    # time.sleep(5)
-                    break
+        elif operating=='上传':
+            dl.account = cp.get("search_condition", "account")
+            dl.account_password = cp.get("search_condition", "account_password")
+            dl.data_U_max = int(cp.get("search_condition", "data_U_max"))
 
     '''--------------------转换程序--------------------'''
-
-    # 判断文件的类型
-    def file_name(self, file_dir):
-        for root, dirs, files in os.walk(file_dir):
-            if 'doc_cache' not in root:
-                for file in files:
-                    names = os.path.splitext(file)
-                    if names[1] == '.html':
-                        self.url_all.append(os.path.join(root, file))
-
-                    #旧版doc程序
-                    # elif names[1] == '.doc':
-                    #
-                    #     # 新建文件夹
-                    #     mkdir = os.path.join(root, 'doc_cache')
-                    #     isExists = os.path.exists(mkdir)
-                    #     if not isExists:
-                    #         os.makedirs(mkdir)
-                    #
-                    #     # 读取文件名称和改后缀名
-                    #     word_url_doc = os.path.join(root, file)
-                    #     word_url_html = os.path.join(root, 'doc_cache', names[0] + '.html')
-                    #     self.url_all.append(word_url_html)
-                    #     # print(word_url_html)
-                    #
-                    #     # 判断是否已经转换成html
-                    #     isExists2 = os.path.exists(word_url_html)
-                    #     if not isExists2:
-                    #         print('转换：' + word_url_doc)
-                    #         downloader.wordsToHtml(self, word_url_doc, word_url_html)
-
-                    elif names[1] == '.doc':
-                        self.url_all.append(os.path.join(root, file))
-
-                    else:
-                        self.conversion_situation['其他类型'] += 1
-                        print('其他类型：', os.path.join(root, file))
-
-    # 判断编码
-    def file_coding(self, file):
-        global htmlf
-        try:
-            htmlf = open(file, 'r', encoding="utf-8")
-            BeautifulSoup(htmlf, 'lxml')
-            return file, 'utf-8'
-        except:
-            try:
-                htmlf = open(file, 'r', encoding="gbk")
-                BeautifulSoup(htmlf, 'lxml')
-                return file, 'gbk'
-            except:
-                try:
-                    htmlf = open(file, 'r', encoding="UTF-16")
-                    BeautifulSoup(htmlf, 'lxml')
-                    return file, 'utf-16'
-                except:
-                    return file, 'utf-8'
-        finally:
-            htmlf.close()
-
-    # 转换doc/docx/mht格式成html
-    def wordsToHtml(self,word_url_old, word_url_new):
-        # global doc
-        # global word
-
-        # kwps.Application WPS接口转换
-        # wps.Application WPS接口转换
-        # word.Application office接口转换
-        try:
-            word = wc.Dispatch('word.Application')
-            doc = word.Documents.Open(word_url_old)
-            doc.SaveAs(word_url_new, 8)
-            doc.Close()
-            word.Quit()
-
-        except:
-            print('错误转换：', word_url_old)
 
     # csv模块导出csv
     def csv_to_csv(self, name,title, datas):
@@ -246,13 +202,11 @@ class downloader(object):
             # print(datas)
             for row in datas:
                 writer.writerow(row)
-        # # 清除缓存
-        # url.clear()
-        # datas.clear()
 
     # xlwt模块导出xls
     def xlwt_to_xls(self,name,title,datas):
-        workbook = xlwt.Workbook(encoding='utf-8')
+        #65535行
+        workbook = xlwt.Workbook(encoding='UTF-8')
         worksheet = workbook.add_sheet(name)
 
         for i in range(len(title)):
@@ -264,203 +218,11 @@ class downloader(object):
 
         workbook.save(name+'.xls')
 
-    # 纷简历-1清洗程序
-    def get_url_fenjianli_1(self, url):
-        global htmlf
-        try:
-            htmlf = open(url[0], 'r', encoding=url[1])
-            soup = BeautifulSoup(htmlf, 'lxml')
-            dicts = dict.fromkeys(self.url_fenjianli_1_title, '')
-
-            boxs = soup.find(class_='menu-box')
-            update = boxs.findAll(class_='update')[0].text.replace('更新时间：', '')
-            # print(box)
-            dicts['更新时间'] = update
-
-            box = boxs.select("dd")
-            # print(box)
-            for i in box:
-                # print(i)
-                s = i.select("label")[0].text
-                i = i.select("div")[0].text
-                # print(s)
-                if '姓名：' == s:
-
-                    dicts['姓名'] = i
-                elif '手机号码：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['手机号码'] = i
-                elif '性别：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['性别'] = i
-                elif '年龄：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['年龄'] = i
-                elif '电子邮件：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['电子邮件'] = i
-                elif '教育程度：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['教育程度'] = i
-                elif '工作年限：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['工作年限'] = i
-                elif '婚姻状况：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['婚姻状况'] = i
-                elif '职业状态：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['职业状态'] = i
-                elif ' 所在地：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['所在地'] = i
-                elif '国籍：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['国籍'] = i
-                elif '户籍：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['户籍'] = i
-                elif '所在行业：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['所在行业'] = i
-                elif '公司名称：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['公司名称'] = i
-                elif '所任职位：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['所任职位'] = i.replace('\n', '')
-                elif '目前薪资：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['目前薪资'] = i
-                elif '期望地点：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['期望地点'] = i
-                elif '期望薪资：' == s:
-                    # i=i.select("div")[0].text
-                    dicts['期望薪资'] = i.replace('\n', '').replace(' ', '')
-
-            boxt = boxs.findAll(class_='exp')[0]
-            boxz = boxt.select('tr th[class="times"]')
-            boxd = boxt.select('td table[class="table table-noborder table-form"]')
-            d = 0
-            kk = []
-            for i in boxz:
-                tt = []
-                # print('--------------------------------+',d)
-                tt.append(i.text)
-                # print(i.text)
-                # 双
-                dd = boxd[d].select('th')
-                tt.append(str('公司：' + dd[0].text.replace(' ', '').replace('\n', '')))
-                # print(dd[0].text.replace(' ', ''))
-
-                aa = boxd[d].select('span')
-                for s in aa:
-                    tt.append(s.text.replace('\n', ''))
-                    # print(s.text)
-                # 单
-                ddd = boxd[d + 1].select('span')
-                tt.append(str('职位：' + ddd[0].text))
-                # print(ddd[0].text)
-                d = d + 2
-                # print(tt)
-                kk.append(tt)
-                # print('--------------------------------=')
-            dicts['工作经历'] = str(kk).replace('], [', '\n').replace("', '", '|').replace("[[' ", '').replace("']]",'').replace("'", '').replace(" ", '')
-
-            dicts['文件位置'] = url[0]
-            # print(dicts)
-            self.url_fenjianli_1_datas.append(dicts)
-        except:
-            self.conversion_situation['错误简历'] += 1
-            # self.false +=1
-            print('错误简历-纷简历-1：',url[0])
-        else:
-            self.conversion_situation['正确简历'] += 1
-            # self.true +=1
-            print('正确简历-纷简历-1：', url[0])
-        finally:
-            htmlf.close()
-
-    # 纷简历-2清洗程序
-    def get_url_fenjianli_2(self, url):
-        global htmlf
-        try:
-            htmlf = open(url[0], 'r', encoding=url[1])
-            soup = BeautifulSoup(htmlf, 'html.parser')
-            dicts = dict.fromkeys(self.url_fenjianli_2_title, '')
-
-            WordSection1 = soup.find(class_="WordSection1")
-            # print(WordSection1)
-            MsoNormal = WordSection1.select('p[class="MsoNormal"]')[0]
-            MsoNormal = MsoNormal.text.replace('简历更新时间:', '')
-            # print(MsoNormal)
-            dicts['更新时间'] = MsoNormal
-
-            ResumeContentStyle = soup.select('table[class="ResumeContentStyle"]')
-            mso_yfti_irow = ResumeContentStyle[0].findAll(style=re.compile("mso-yfti-irow:"))
-            for irow in mso_yfti_irow[1:]:
-                # print(irow)
-                irow = irow.text.replace('： \n\n\n', '：').replace('\xa0', '').split('\n')
-                irow = [i for i in irow if i != '']
-                # print(irow)
-                for i in irow:
-                    if '姓名：' in i:
-                        dicts['姓名'] = i.replace('姓名：', '')
-                    elif '性别：' in i:
-                        dicts['性别'] = i.replace('性别：', '')
-                    elif '手机号：' in i:
-                        dicts['手机号'] = i.replace('手机号：', '')
-                    elif '年龄：' in i:
-                        dicts['年龄'] = i.replace('年龄：', '')
-                    elif '电子邮箱：' in i:
-                        dicts['电子邮箱'] = i.replace('电子邮箱：', '')
-                    elif '学历：' in i:
-                        dicts['学历'] = i.replace('学历：', '')
-                    elif '婚姻状况：' in i:
-                        dicts['婚姻状况'] = i.replace('婚姻状况：', '')
-                    elif '工作年限：' in i:
-                        dicts['工作年限'] = i.replace('工作年限：', '')
-                    elif '现居住地：' in i:
-                        dicts['现居住地'] = i.replace('现居住地：', '')
-                    elif '户籍：' in i:
-                        dicts['户籍'] = i.replace('户籍：', '')
-            mso_yfti_irow = ResumeContentStyle[1].findAll(style=re.compile("mso-yfti-irow:"))
-            # print(mso_yfti_irow)
-            for irow in mso_yfti_irow[1:]:
-                # print(irow)
-                irow = irow.text.replace('： \n\n\n', '：').replace('\xa0', '').split('\n')
-                irow = [i for i in irow if i != '']
-                # print(irow)
-                for i in irow:
-                    if '期望行业：' in i:
-                        dicts['期望行业'] = i.replace('期望行业：', '')
-                    elif '期望职业：' in i:
-                        dicts['期望职业'] = i.replace('期望职业：', '')
-                    elif '期望地点：' in i:
-                        dicts['期望地点'] = i.replace('期望地点：', '')
-                    elif '期望薪资：' in i:
-                        dicts['期望薪资'] = i.replace('期望薪资：', '')
-                    elif '工作性质：' in i:
-                        dicts['工作性质'] = i.replace('工作性质：', '')
-                    elif '目前状态：' in i:
-                        dicts['目前状态'] = i.replace('目前状态：', '')
-
-            dicts['文件位置'] = url[0]
-            # print(dicts)
-            self.url_fenjianli_2_datas.append(dicts)
-        except:
-            print('错误简历-纷简历-2：',url[0])
-        else:
-            print('正确简历-纷简历-2：', url[0])
-        finally:
-            htmlf.close()
-
-    # 纷简历-3清洗程序
+    # 纷简历-3清洗程序 doc
     def get_url_fenjianli_3(self,url):
         try:
             # print(url)
-            dicts = dict.fromkeys(self.url_fenjianli_3_title, "")
+            dicts = dict.fromkeys(dl.url_fenjianli_3_title, "")
 
             doc_tables=Document(url).tables
 
@@ -600,7 +362,7 @@ class downloader(object):
                             if doc_tables_data.cell(rows, -1).text[11] == '-':
                                 tables=['培训时间','培训机构','培训课程']
                                 tables_dicts = dict.fromkeys(tables, '')
-                                tables_dicts['培训时间'] = doc_tables_data.cell(rows, -1).text
+                                tables_dicts['培训时间'] = doc_tables_data.cell(rows, -1).text.replace('-','/').replace(' /',' -')
                                 tables_dicts['培训机构'] = doc_tables_data.cell(rows, 0).text
                                 tables_dicts['培训课程'] = doc_tables_data.cell(rows, 1).text
                                 professional_skills_lists.append(tables_dicts)
@@ -613,7 +375,7 @@ class downloader(object):
                     doc_tables_data=doc_tables[i + 1]
                     lists = []
                     for rows in range(len(doc_tables_data.rows))[1:]:
-                        lists.append(doc_tables_data.cell(rows, 0).text)
+                        lists.append(doc_tables_data.cell(rows, 0).text.replace('\\xa0',' ').replace('\\u3000',' ').replace('"','').replace("'",''))
                     # print(lists)
                     dicts['专业技能'] = str(lists).replace("'",'"')
 
@@ -637,24 +399,31 @@ class downloader(object):
             dicts['创建时间'] = time.strftime('%Y-%m-%d',time.localtime(time.time()))
 
             # print(dicts)
-            self.url_fenjianli_3_datas.append(dicts)
+            dl.url_fenjianli_3_datas.append(dicts)
         except:
-            self.conversion_situation['错误简历'] += 1
-            # self.false += 1
-            print('错误简历-纷简历-3：',url)
+            dl.conversion_situation['错误简历'] += 1
+            print('错误简历-纷简历-3：', os.path.basename(url))
+            copyfile(url, '.\data-转换\错误简历\%s'%(os.path.basename(url)))
         else:
-            self.conversion_situation['正确简历'] += 1
+            dl.conversion_situation['正确简历'] += 1
+            print('正确简历-纷简历-3：', os.path.basename(url))
+            try:
+                dl.get_url_xinliechang_1(dicts)
+            except:
+                print('错误转换-新猎场-1：',os.path.basename(url))
+            try:
+                dl.get_url_xinliechang_2(dicts)
+            except:
+                print('错误转换-新猎场-2：',os.path.basename(url))
+            if dl.sql_status == True:
+                dl.mysql_judge('fenjianli_id', 'insert', dicts)
+                dl.mysql_judge('fenjianli_doc', '', dicts)
 
-            # self.true += 1
-            print('正确简历-纷简历-3：', url)
-            dl.up_mysql(dicts, 'fenjianli_doc')
-            # dicts['简历编号']
-
-    # 纷简历-4清洗程序
+    # 纷简历-4清洗程序 html
     def get_url_fenjianli_4(self, url):
         try:
-            htmlf = open(url, 'r', encoding='UTF-8')
-            soup = BeautifulSoup(htmlf, 'lxml')
+            with open(url, 'r', encoding='UTF-8') as f:
+                soup = BeautifulSoup(f, 'lxml')
             dicts = dict.fromkeys(dl.url_fenjianli_4_title, '')
             try:
                 dicts['简历编号'] = soup.find('input').get('value')
@@ -696,7 +465,7 @@ class downloader(object):
                 elif '期望行业' in label[i].text:
                     dicts['期望行业'] = str(col[i].text.split(';')).replace("'",'"')
                 elif '期望职位' in label[i].text:
-                    dicts['期望职位'] = str(col[i].text.replace('\n', '').split(';')).replace("'",'"')
+                    dicts['期望职位'] = str(col[i].text.replace('\n', '').replace('\\xa0\\xa0',';').replace('\\xa0',' ').replace('\\u3000',' ').split(';')).replace("'",'"')
                 elif '期望地点' in label[i].text:
                     dicts['期望地点'] = str(col[i].text.split('-')).replace("'",'"')
                 elif '期望薪资' in label[i].text:
@@ -801,9 +570,9 @@ class downloader(object):
                         pointers=i.select('td')
                         lens=len(pointers)
                         if lens==1:
-                            tables_dicts['培训时间'] = pointers[0].text
+                            tables_dicts['培训时间'] = pointers[0].text.replace('-','/').replace(' /',' -')
                         else:
-                            tables_dicts['培训时间'] = pointers[0].text
+                            tables_dicts['培训时间'] = pointers[0].text.replace('-','/').replace(' /',' -')
                             tables_dicts['培训机构'] = pointers[1].text
                             tables_dicts['培训课程'] = pointers[2].text
                         lists.append(tables_dicts)
@@ -817,7 +586,7 @@ class downloader(object):
                 elif '专业技能' in n.text:
                     # print(4)
                     pointer = soup.select('section[class="board"] div[class="cont"]')[cout]
-                    dicts['专业技能'] = pointer.text.replace(' ', '').split('\n')
+                    dicts['专业技能'] = pointer.text.replace(' ', '').replace('\\xa0',' ').replace('\\u3000',' ').replace("'",'').replace('"','').split('\n')
                     dicts['专业技能'] = str([i for i in dicts['专业技能'] if i != '']).replace("'",'"')
                     # print(dicts['专业技能'] )
                     # print(pointer)
@@ -878,123 +647,321 @@ class downloader(object):
             dicts['创建时间'] = time.strftime('%Y-%m-%d',time.localtime(time.time()))
 
             # print(dicts)
-            self.url_fenjianli_4_datas.append(dicts)
+            dl.url_fenjianli_4_datas.append(dicts)
         except:
-            self.conversion_situation['错误简历'] += 1
-            # self.false += 1
-            print('错误简历-纷简历-4：',url)
+            dl.conversion_situation['错误简历'] += 1
+            print('错误简历-纷简历-4：',os.path.basename(url))
+            copyfile(url, '.\data-转换\错误简历\%s'%(os.path.basename(url)))
         else:
-            self.conversion_situation['正确简历'] += 1
-            # self.true += 1
-            print('正确简历-纷简历-4：', url)
-            dl.up_mysql(dicts, 'fenjianli_html')
+            dl.conversion_situation['正确简历'] += 1
+            print('正确简历-纷简历-4：', os.path.basename(url))
+            try:
+                dl.get_url_xinliechang_1(dicts)
+            except:
+                print('错误转换-新猎场-1：',os.path.basename(url))
+            try:
+                dl.get_url_xinliechang_2(dicts)
+            except:
+                print('错误转换-新猎场-2：',os.path.basename(url))
+            if dl.sql_status == True:
+                dl.mysql_judge('fenjianli_id', 'insert', dicts)
+                dl.mysql_judge('fenjianli_html', '', dicts)
+
+    # 新猎场-1导入转换
+    def get_url_xinliechang_1(self, data):
+        dicts = dict.fromkeys(dl.url_xinliechang_1_title, '')
+        dicts['姓名']= data['姓名']
+        dicts['手机号'] = data['手机号码']
+        dicts['性别'] = data['性别']
+        dicts['年龄'] = data['年龄'].replace('岁','')
+        dicts['期望薪资'] = data['期望薪资']
+        dicts['工作年限'] = data['工作年限']
+        try:
+            dicts['期望地点'] =  ','.join(json.loads(data['期望地点']))
+        except:
+            pass
+        dicts['自我评价'] = data['自我评价']
+        try:
+            # html
+            try:
+                dicts['期望职业'] = ','.join(json.loads(data['期望职位']))
+            except:
+                pass
+            dicts['学历'] = data['教育程度']
+            dicts['现居住地'] = data['所在地']
+            dicts['电子邮箱'] = data['电子邮件']
+            dicts['目前状态'] = data['职业状态']
+        except:
+            # doc
+            try:
+                dicts['期望职业'] = ','.join(json.loads(data['期望职业']))
+            except:
+                pass
+            dicts['学历'] = data['学历']
+            dicts['现居住地'] = data['现居住地']
+            dicts['电子邮箱'] = data['电子邮箱']
+            dicts['目前状态'] = data['目前状态']
+
+        gzjl=eval(data['工作经历'])
+        gzjl_data=''
+        n=1
+        for i in gzjl:
+            gzjl_data=gzjl_data+'{0}.{1}-{2}职位:{3}'.format(n,i['任职时间'].replace('.','/'),i['公司'],i['职位'])
+            n+=1
+        dicts['工作经历'] = gzjl_data
+
+        dicts['创建时间'] = data['创建时间']
+        dl.url_xinliechang_1_datas.append(dicts)
+        # print(dicts)
+
+    # 新猎场-2导入转换
+    def get_url_xinliechang_2(self, data):
+        dicts = dict.fromkeys(dl.url_xinliechang_2_title, '')
+        dicts['简历名称']= data['姓名']
+        dicts['姓名'] = data['姓名']
+        dicts['性别'] = data['性别']
+        try:
+            dicts['出生年月'] = int(time.strftime("%Y", time.localtime())) - int(data['年龄'].replace('岁', ''))
+        except:
+            pass
+        dicts['籍贯'] = data['户籍']
+        dicts['婚否'] = data['婚姻状况']
+        dicts['工作经验'] = data['工作年限']
+
+        if 'html' in data['简历来源']:
+            dicts['学历'] = data['教育程度']
+
+
+            if data['所获证书'] != '':
+                for i in json.loads(data['所获证书']):
+                    dicts['证书'] += '【#】{0}|{1}' .format(i['证书名称'],i['获得时间'])
+                dicts['证书'] = dicts['证书'][3:]
+
+            dicts['邮箱'] = data['电子邮件']
+            dicts['居住地'] = data['所在地']
+
+            if data['期望职位'] != '':
+                dicts['意向职位'] = ','.join(json.loads(data['期望职位']))
+
+            dicts['目前状态'] = data['职业状态']
+
+            if data['工作经历'] != '':
+                lists=[]
+                for i in json.loads(data['工作经历']):
+                    list = dict.fromkeys(["任职时间", "公司", "行业", "职位", "工作描述"], "")
+                    list['任职时间'] = i['任职时间']
+                    list['公司'] = i['公司']
+                    list['行业'] = i['公司行业']
+                    list['职位'] = i['职位']
+                    list['工作描述'] = i['职责']
+                    lists.append(list)
+
+                dicts['工作经历']=str(json.dumps(lists, ensure_ascii=False))
+
+            if data['项目经历'] != '':
+                lists=[]
+                for i in json.loads(data['项目经历']):
+                    list = dict.fromkeys(["项目时间", "项目名称", "项目职责", "项目描述"], "")
+                    list['项目时间'] = i['项目时间']
+                    list['项目名称'] = i['项目名称']
+                    list['项目职责'] = i['项目职责']
+                    list['项目描述'] = i['项目简介']
+                    lists.append(list)
+
+                dicts['项目经历']=str(json.dumps(lists, ensure_ascii=False))
+
+        else:
+            dicts['学历'] = data['学历']
+            if data['证书'] != '':
+                for i in json.loads(data['证书']):
+                    dicts['证书'] += '【#】{0}|{1}' .format(i['证书名称'],i['获得时间'])
+                dicts['证书'] = dicts['证书'][3:]
+
+            dicts['邮箱'] = data['电子邮箱']
+            dicts['居住地'] = data['现居住地']
+            if data['期望职业'] != '':
+                dicts['意向职位'] = ','.join(json.loads(data['期望职业']))
+            dicts['目前状态'] = data['目前状态']
+            dicts['工作经历'] = data['工作经历']
+            dicts['项目经历'] = data['项目经历']
+
+        if data['期望行业'] != '':
+            dicts['意向行业']='【#】'.join(json.loads(data['期望行业']))
+
+        if data['期望地点'] != '':
+            dicts['意向工作地区'] = '/'.join(json.loads(data['期望地点']))
+
+        dicts['意向薪资'] =int(float(data['期望薪资'].split('-')[0].split('K')[0])*1000) if data['期望薪资'] != "面议" else "面议"
+
+        if data['教育经历'] != '':
+            for i in json.loads(data['教育经历']):
+                dicts['教育经历'] += '【#】{0}|{1}|{2}|{3}'.format(i['就读时间'], i['学校'],i['专业'],i['学历'])
+            dicts['教育经历'] = dicts['教育经历'][3:]
+
+        if data['语言能力'] != '':
+            for i in json.loads(data['语言能力']):
+                if i['语言'] != '':
+                    dicts['语言能力'] += '【#】{0}|{1}'.format(i['语言'], i['读写情况'])
+            dicts['语言能力'] = dicts['语言能力'][3:]
+
+        if data['专业技能'] != '':
+            dicts['专业技能'] = ','.join(json.loads(data['专业技能']))
+
+        dicts['手机'] = data['手机号码']
+        dicts['自我描述'] = data['自我评价']
+        dicts['添加时间'] = data['创建时间']
+        dicts['渠道来源'] = data['简历来源']
+
+        if data['培训经历'] != '':
+            lists = []
+            for i in json.loads(data['培训经历']):
+                list = dict.fromkeys(["培训时间", "培训机构", "培训课程"], "")
+                list['培训时间'] = i['培训时间'].replace('-','/').replace(' /',' -')
+                list['培训机构'] = i['培训机构']
+                list['培训课程'] = i['培训课程']
+                lists.append(list)
+            dicts['培训经历'] = str(json.dumps(lists, ensure_ascii=False))
+
+
+        dl.url_xinliechang_2_datas.append(dicts)
+        # print(dicts)
 
     # 简易转换分类控制
     def get_task(self, name, get_url, url, title, datas):
-        for i in url:
-            get_url(i)
+
+        pool = ThreadPoolExecutor()
+        task = [i for i in pool.map(get_url, url)]
 
         # 利用csv模块导出csv
-        # downloader.csv_to_csv(self, name, title, datas)
+        # dl.csv_to_csv(name, title, datas)
 
         # 利用xlwt导出xls
-        downloader.xlwt_to_xls(self, name, title, datas)
-
-    #上传到数据库里
-    def up_mysql(self,data,table_name):
-        data=list(data.values())
-        resume_id = data[1]
-        phone_number = data[4]
-
-        # table_name = 'fenjianli_html'  # 数据表名称
-        # table_name = 'fenjianli_doc'  # 数据表名称
-
-        if phone_number != '':
-            db = pymysql.connect(host="192.168.0.41", user="root", password="", db="it-data", port=3306,charset='utf8mb4')  # 连接数据库
-            cur = db.cursor(cursor=pymysql.cursors.DictCursor)  # 获取一个列表游标
-            # cur=db.cursor() # 获取一个游标
-
-            #ret1
-            cur.execute("select `手机号码` from {0} where `手机号码`='{1}'".format(table_name, phone_number))
-            ret1 = cur.fetchone()
-
-            if phone_number in str(ret1):
-                sql="DELETE FROM {0} where `手机号码`='{1}'".format(table_name,phone_number) # 删除数据
-                cur.execute(sql)
-                format = str(',%s' * len(data))[1:]
-                cur.execute('insert into {0} values({1})'.format(table_name, format), data)  # 插入数据
-            else:
-                format = str(',%s' * len(data))[1:]
-                cur.execute('insert into {0} values({1})'.format(table_name, format), data)  # 插入数据
-
-            # ret2
-            cur.execute("select `resume_id` from {0} where `resume_id`='{1}'".format('fenjianli_id', resume_id))
-            ret2 = cur.fetchone()
-
-            if ret2 == None:
-                downdate = time.strftime('%Y-%m-%d', time.localtime(time.time()))
-                upload = [resume_id, downdate, '转换', '{"keywords": "转换"}']
-                format = str(',%s' * len(upload))[1:]
-                cur.execute('insert into {0} values({1})'.format('fenjianli_id', format), upload)  # 插入数据
-
-
-            # 提交
-            db.commit()
-            # 关闭指针对象
-            cur.close()
-            # 关闭连接对象
-            db.close()
+        dl.xlwt_to_xls(name, title, datas)
 
     # 启动转换程序
     def turn_data_program(self):
+        try:
+            # 读取配置文件
+            if os.path.exists('config.ini') == True:
+                dl.get_conf()
 
-        cwd = os.getcwd()
-        # 启动文件地址提取和转换程序
-        dl.file_name(cwd + '\data-转换')
-        if len(dl.url_all) == 0:
-            print('请放入转换文件')
-            time.sleep(5)
-        else:
-            # 启动判断简历类型程序
-            for i in dl.url_all:
-                names = os.path.splitext(i)
+            # 启动文件地址提取和转换程序
+            for root, dirs, files in os.walk('.\data-转换'):
+                for file in files:
+                    files=os.path.splitext(file)[1]
+                    if files == '.html':
+                        dl.url_fenjianli_4.append(os.path.join(root, file))
 
-                # if names[1] == '.html':
-                #     dl.url_fenjianli_1.append(dl.file_coding(i))
-                # elif 'doc_cache' in i:
-                #     dl.url_fenjianli_2.append(dl.file_coding(i))
+                    elif files == '.doc':
+                        dl.url_fenjianli_3.append(os.path.join(root, file))
+                    else:
+                        dl.conversion_situation['其他类型'] += 1
+                        print('其他类型：', file)
 
-                if names[1] == '.html':
-                    dl.url_fenjianli_4.append(i)
+            if len(dl.url_fenjianli_3) == 0 and len(dl.url_fenjianli_4) == 0:
+                print('请放入转换文件')
+                time.sleep(5)
+            else:
+                dl.account = '转换'
 
-                elif names[1] == '.doc':
-                    dl.url_fenjianli_3.append(i)
+                if len(dl.url_fenjianli_3) != 0:
+                    dl.get_task('纷简历-3', dl.get_url_fenjianli_3, dl.url_fenjianli_3, dl.url_fenjianli_3_title,dl.url_fenjianli_3_datas)
 
-            # if len(dl.url_fenjianli_1) != 0:
-            #     dl.get_task('纷简历-1', dl.get_url_fenjianli_1, dl.url_fenjianli_1, dl.url_fenjianli_1_title,dl.url_fenjianli_1_datas)
+                if len(dl.url_fenjianli_4) != 0:
+                    dl.get_task('纷简历-4', dl.get_url_fenjianli_4, dl.url_fenjianli_4, dl.url_fenjianli_4_title,dl.url_fenjianli_4_datas)
 
-            # if len(dl.url_fenjianli_2) != 0:
-            #     dl.get_task('纷简历-2',dl.get_url_fenjianli_2, dl.url_fenjianli_2, dl.url_fenjianli_2_title, dl.url_fenjianli_2_datas)
+                # 新猎场导入用_1
+                if len(dl.url_xinliechang_1_datas) != 0:
+                    dl.xlwt_to_xls('新猎场-1', dl.url_xinliechang_1_title, dl.url_xinliechang_1_datas)
 
-            if len(dl.url_fenjianli_3) != 0:
-                dl.get_task('纷简历-3', dl.get_url_fenjianli_3, dl.url_fenjianli_3, dl.url_fenjianli_3_title,dl.url_fenjianli_3_datas)
+                # 新猎场导入用_2
+                if len(dl.url_xinliechang_2_datas) != 0:
+                    dl.xlwt_to_xls('新猎场-2', dl.url_xinliechang_2_title, dl.url_xinliechang_2_datas)
 
-            if len(dl.url_fenjianli_4) != 0:
-                dl.get_task('纷简历-4', dl.get_url_fenjianli_4, dl.url_fenjianli_4, dl.url_fenjianli_4_title,dl.url_fenjianli_4_datas)
-
+        except BaseException as e:
+            print(e)
+        finally:
             print()
             print("正确数量：%d | 错误数量：%d | 其他类型：%d" % (dl.conversion_situation['正确简历'], dl.conversion_situation['错误简历'], dl.conversion_situation['其他类型']))
             input("回车结束程序")
-            # print()
-            # print('五秒后自动结束程序')
-            # time.sleep(5)
+
+    '''--------------------上传程序--------------------'''
+
+    # 上传文件
+    def post_files(self,path):
+
+        #给个随机文件名
+        name = str(random.randint(10000000, 100000000))+os.path.splitext(path)[-1]
+        url = 'http://www.fenjianli.com/share/upload'
+        cookies = {'fid': dl.cookie}
+        with open(path, 'rb') as f:
+
+            files = {'file': (name, f, 'application/msword', {'Expires': '0'})}
+            success = requests.post(url, files=files, cookies=cookies)
+            success=str(json.loads(success.text))
+            if '上传成功' in success:
+                msg = '上传成功'
+                dl.upload_situation['上传成功'] += 1
+                dl.data_U_min += 1
+
+            elif '已存在相同简历' in success:
+                msg = '存在简历'
+                dl.upload_situation['存在简历'] += 1
+
+            elif '登录状态已失效' in success:
+                msg = '登录状态已失效'
+
+            else:
+                msg = '上传失败'
+                dl.upload_situation['上传失败'] += 1
+        return msg,path
+
+    # 启动上传程序
+    def up_data_program(self):
+        try:
+            for root, dirs, files in os.walk('.\data-上传'):
+                for file in files:
+                    files=os.path.splitext(file)[1]
+                    splitext=['.doc','.docx','.xls','.xlsx','.pdf','.txt','.html']
+                    if files in splitext:
+                        dl.url_all.append(os.path.join(root, file))
+
+            if len(dl.url_all) == 0:
+                print('请放入上传文件')
+                time.sleep(5)
+
+            else:
+                if os.path.exists('config.ini') == True:
+                    dl.get_conf('上传')
+                dl.get_cookies2()
+                print('可上传数量：' + str(len(dl.url_all)) + '\n要上传数量：' + str (dl.data_U_max))
+
+                # 多线程
+                pool = ThreadPoolExecutor(5)
+                for data_report_1,data_report_2 in pool.map(dl.post_files, dl.url_all):
+                    if dl.data_U_min < dl.data_U_max:
+                        print(data_report_1 + "：剩余" + dl.get_score() + ' 上传成功' + str (dl.data_U_min))
+                        if data_report_1 == '登录状态已失效':
+                            print('----------《登录失效请重新登录账户》----------')
+                            break
+                        os.remove(data_report_2)
+                    else:
+                        break
+
+        except BaseException as e:
+            print(e)
+        finally:
+            print()
+            print("上传成功：%d | 存在简历：%d | 上传失败：%d"  % (dl.upload_situation['上传成功'], dl.upload_situation['存在简历'],dl.upload_situation['上传失败']))
+            input("回车结束程序")
 
     '''--------------------下载程序--------------------'''
 
-    #搜索条件模块
+    # 搜索条件模块
     def search_condition(self):
-        self.account=input('下载账号：')
-        self.data_D_max=int(input('下载数量：'))
+
+        dl.account=input('下载账号：')
+        dl.data_D_max=int(input('下载数量：'))
 
         #条件
         dicts = {}
@@ -1004,7 +971,7 @@ class downloader(object):
 
         city = input('城市编号：')
         if city != '':
-            dicts.update({'city': int(city)})
+            dicts.update({'city': city})
 
         age = input('年龄：')
         if age != '':
@@ -1012,21 +979,25 @@ class downloader(object):
 
         degree = input('学历编号：')
         if degree != '':
-            dicts.update({'degree': int(degree)})
+            dicts.update({'degree': degree})
 
         sex = input('性别：')
         if sex != '':
-            dicts.update({'sex': int(sex)})
+            dicts.update({'sex': sex})
+
+        salarys = input('期望薪资：')
+        if salarys != '':
+            dicts.update({'salarys': salarys})
 
         update = input('更新日期：')
         if update != '':
-            dicts.update({'update': int(update)})
+            dicts.update({'update': update})
 
         dicts.update({'hideDownloaded': 1})
         dicts.update({'page': 1})
-        self.condition = dicts
+        dl.condition = dicts
 
-    #获得简历ID
+    # 获得简历ID
     def get_resume_id(self,page):
         url = 'http://www.fenjianli.com/search/list'
         cookies = {'fid': dl.cookie}
@@ -1042,10 +1013,10 @@ class downloader(object):
             'Referer': 'http://www.fenjianli.com/search',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
         }
-        self.condition['page']=page
-        payload=self.condition
-
+        dl.condition['page']=page
+        payload=dl.condition
         html = requests.post(url, data=payload, cookies=cookies,headers=headers).text
+
         for i in json.loads(html)['data']['data']:
             if dl.data_D_min < dl.data_D_max:
                 dl.search_mysql(i['es_id'])
@@ -1053,61 +1024,65 @@ class downloader(object):
             else:
                 break
 
-    #判断ID是否存在
+    # 判断ID是否存在
     def search_mysql(self,resume_id):
-        table_name = 'fenjianli_id'  # 数据表名称
-        downdate=time.strftime('%Y-%m-%d', time.localtime(time.time()))
 
-        db = pymysql.connect(host="192.168.0.41", user="root", password="", db="it-data", port=3306,charset='utf8mb4')  # 连接数据库
-        # cur = db.cursor(cursor=pymysql.cursors.DictCursor)  # 获取一个列表游标
-        cur = db.cursor()  # 获取一个游标
-        cur.execute("select resume_id from {0} where resume_id='{1}'".format(table_name, resume_id))
-        select_id = cur.fetchone()
-        # print(select_id)
-        if select_id==None:
+        #检查数据库是否存在这个简历ID
+        if dl.sql_status == True:
+            judge = dl.mysql_judge('fenjianli_id', 'select', {'resume_id': resume_id})
+        else:
+            judge = None
+
+        if judge==None:
+
             # 下载联系方式状态:剩余积分不足/您已经下载过了/success
-
             exchange = dl.exchange(resume_id)
-            if exchange != '剩余积分不足':
-                print('未下载简历',resume_id)
-                if self.data_D_min != 0:
+
+
+            if exchange == 'success':
+                print('未下载简历：剩下',dl.get_score())
+
+                if dl.data_D_min != 0:
                     time.sleep(random.randint(10, 50)/10)
 
                 #下载html文件
-                dl.down_data(resume_id)
+                dl.download_html(resume_id)
                 judge_result=dl.down_judge(resume_id)
+
+                # 下载doc文件
+                dl.download_doc(resume_id)
 
                 #上传数据库
                 if judge_result=='成功':
 
-                    # 下载doc文件
-                    dl.download_doc(resume_id)
+                    # 上传ID到数据库里
+                    if dl.sql_status == True:
+                        dl.mysql_judge('fenjianli_id', 'insert', {'resume_id': resume_id})
 
-                    upload = [resume_id, downdate, self.account,str(json.dumps(self.condition,ensure_ascii=False))]
-                    # # print(upload)
-                    format = str(',%s' * len(upload))[1:]
-                    cur.execute('insert into {0} values({1})'.format(table_name, format), upload)  # 插入数据
-                    # dl.get_url_fenjianli_4(os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html'))) #下载并上传数据
-                    self.data_D_min+=1
-                    self.download_situation['下载成功'] += 1
+                    # 下载并上传数据
+                    # dl.get_url_fenjianli_3(os.path.getsize(os.path.join('data-下载\doc\\', resume_id + '.doc')))
+                    # dl.get_url_fenjianli_4(os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html')))
+
+                    dl.data_D_min+=1
+                    dl.download_situation['下载成功'] += 1
+
                 else:
-                    print('下载失败简历', resume_id)
-                    self.download_situation['下载失败'] += 1
-            else:
+                    print('下载失败简历：剩下', dl.get_score())
+                    dl.download_situation['下载失败'] += 1
+
+            elif exchange == '您已经下载过了':
+                print('已下载简历：剩下', dl.get_score())
+
+            elif exchange == '剩余积分不足':
                 print('账号积分不足，请上传简历补充积分')
-                self.data_D_min = self.data_D_max
+                dl.data_D_min = dl.data_D_max
+            else:
+                print('登入一次72招浏览器后再来下载')
+                dl.data_D_min = dl.data_D_max
         else:
-            print('已下载简历',resume_id)
+            print('已下载简历：剩下',dl.get_score())
 
-
-        # 提交
-        db.commit()
-        # 关闭指针对象
-        cur.close()
-        # 关闭连接对象
-        db.close()
-
-    #下载联系方式
+    # 下载联系方式
     def exchange(self,resume_id):
         url = 'http://www.fenjianli.com/resume/download'
         cookies = {'fid': dl.cookie}
@@ -1125,13 +1100,14 @@ class downloader(object):
         }
         payload={'resumeId':resume_id}
         html = requests.post(url, data=payload, cookies=cookies,headers=headers).text
+
         htmlf=json.loads(html)['msg']
-        # print(htmlf)
         return htmlf
 
-    #下载简历html数据
-    def down_data(self,resume_id):
+    # 下载简历html数据
+    def download_html(self,resume_id):
         url = 'http://www.fenjianli.com/resume/resumeTemplate'
+        cookies = {'fid': dl.cookie}
         headers={
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'Accept-Encoding': 'gzip, deflate',
@@ -1142,16 +1118,13 @@ class downloader(object):
             'Upgrade-Insecure-Requests': '1',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
         }
-        cookies = {'fid': self.cookie}
         payload = {'resumeId': resume_id}
         html = requests.get(url, params=payload, cookies=cookies,headers=headers).text
 
-        # 下载简历
-        htmlf = open('data-下载\html\\' + resume_id + '.html', 'w', encoding='UTF-8')
-        htmlf.write(html)
-        htmlf.close()
+        with open('data-下载\html\\' + resume_id + '.html', 'w', encoding='UTF-8') as code:
+            code.write(html)
 
-    #下载简历doc数据
+    # 下载简历doc数据
     def download_doc(self,resume_id):
         url = 'http://www.fenjianli.com/resume/export'
         cookies = {'fid': dl.cookie}
@@ -1169,27 +1142,24 @@ class downloader(object):
         }
         payload={'resumeId':resume_id,'type':'word'}
         html = requests.post(url, data=payload, cookies=cookies,headers=headers)
-        # print(html)
+
         with open('data-下载\doc\\' + resume_id + '.doc', 'wb') as code:
             code.write(html.content)
 
-    #判断文件是否成功下载
+    # 判断文件是否成功下载
     def down_judge(self,resume_id):
         size = os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html'))
 
         if size == 10271:
             print('----------《登录失效请重新登录账户》----------')
-            dl.get_cookies()
-            htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-            htmlf.write(dl.cookie)
-            htmlf.close()
-            dl.down_data(resume_id)
+            dl.get_cookies2('登录失效')
+            dl.download_html(resume_id)
             # time.sleep(random.randint(100, 200) / 10)
 
         cycle_number = 0
         while size == 5298 and cycle_number <= 3:
             time.sleep(30)
-            dl.down_data(resume_id)
+            dl.download_html(resume_id)
             size = os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html'))
             cycle_number += 1
 
@@ -1198,96 +1168,201 @@ class downloader(object):
         else:
             return '失败'
 
-    #启动下载程序
+    # 启动下载程序
     def down_data_program(self):
+
         try:
-            htmlf = open('cookie.txt', 'r', encoding='UTF-8')
-            dl.cookie = htmlf.read()
-            htmlf.close()
-        except:
-            dl.get_cookies()
-            htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-            htmlf.write(dl.cookie)
-            htmlf.close()
+            # 确认条件
+            while True:
+                if os.path.exists('config.ini') == True:
+                    dl.get_conf('下载')
+                else:
+                    dl.search_condition()
+                confirm = input('是否确定条件（Y/N）')
+                if confirm == 'Y' or confirm == 'y':
+                    break
+                print()
 
-        # 确认条件
-        while True:
-            dl.search_condition()
-            confirm = input('是否确定条件（Y/N）')
-            if confirm == 'Y' or confirm == 'y':
-                break
-            print()
+            dl.get_cookies2()
 
-        #获得每页ID
-        for i in range(1,135):
-            # print(i)
-            if self.data_D_min <dl.data_D_max:
-                try:
-                    dl.get_resume_id(i)
-                    time.sleep(random.randint(10, 30) /10)
-                except:
-                    print('----------《登录失效请重新登录账户》----------')
-                    dl.get_cookies()
-                    htmlf = open('cookie.txt', 'w', encoding='UTF-8')
-                    htmlf.write(dl.cookie)
-                    htmlf.close()
-                    dl.get_resume_id(i)
-                    time.sleep(random.randint(10, 30)/10)
-            else:
-                break
+            #获得每页ID
+            for i in range(1,135):
+                # print(i)
+                if dl.data_D_min < dl.data_D_max:
+                    try:
+                        dl.get_resume_id(i)
+                        time.sleep(random.randint(10, 30) /10)
+                    except:
+                        n=3
+                        while n :
+                            try:
+                                time.sleep(random.randint(10, 30) / 10)
+                                dl.get_resume_id(i)
+                                break
+                            except:
+                                n -= 1
+                        if n==0:
+                            print('----------《登录失效请重新登录账户》----------')
+                            dl.get_cookies2('登录失效')
+                            dl.get_resume_id(i)
+                            time.sleep(random.randint(10, 30)/10)
+                else:
+                    break
+        except BaseException as e:
+            print(e)
+        finally:
+            #下载结果报告
+            print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
+            input("回车结束程序")
 
-        #下载结果报告
-        print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
-        input("回车结束程序")
+    '''--------------------统计程序--------------------'''
 
-    '''--------------------测试程序--------------------'''
-
-    #筛选获得ID_下载页
-    def get_ID2(self,page):
-        url='http://www.fenjianli.com/resume/lpDownLoadResumeList'
-        htmlf = open('cookie.txt', 'r', encoding='UTF-8')
-        self.cookie = htmlf.read()
-        htmlf.close()
-        # url = 'http://www.fenjianli.com/search/list'
-        cookies = {'fid': self.cookie}
-        payload = {
-            'page': page,
-            'name': '',
-            'job': '',
-            'company': '',
-            'order': 'desc'
+    # 获得简历日期
+    def get_resume_days(self, page):
+        url = 'http://www.fenjianli.com/search/list'
+        cookies = {'fid': dl.cookie}
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Connection': 'keep-alive',
+            'Content-Length': '28',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Host': 'www.fenjianli.com',
+            'Origin': 'http://www.fenjianli.com',
+            'Referer': 'http://www.fenjianli.com/search',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
         }
+        dl.condition['page'] = page
+        payload = dl.condition
+        html = requests.post(url, data=payload, cookies=cookies, headers=headers).text
+        htmls=[]
+        for i in json.loads(html)['data']['data']:
+            htmls.append(i['last_date_show'])
+        dl.numbers += 1
+        return htmls
 
-        htmlf = requests.get(url, params=payload, cookies=cookies).text
-        soup = BeautifulSoup(htmlf, 'lxml')
-        soup=soup.select('div[class="max-width resume-box"] div[class="resume-list"]')
-        for i in soup:
-            # print(i.get('data-id'))
+    # 获得数据切点位置
+    def get_data_slice(self,page,data,days,city):
+        position = ''
+        if days in data and (page == 1 or len(list(set(data))) == 2) and position == '':
+            for a in range(len(data)):
+                if days == data[a]:
+                    position = [page, a + 1]
+                    break
+        if days in data and page != 1 and position == '':
+            for a in range(page-15,page):
+                if position == '':
+                    while True:
+                        try:
+                            data = dl.get_resume_days(a)
+                            break
+                        except:
+                            dl.get_cookies2('登录失效')
+                    print('城市：{0} 页数：{1} 搜索次数：{2}'.format(city,a,dl.numbers),list(set(data)))
 
-            if dl.data_D_min<dl.data_D_max:
-                dl.search_mysql_id(i.get('data-id'))
+                    for b in range(len(data)):
+                        if days == data[b]:
+                            position = [a, b + 1]
+                            break
+                else:
+                    break
+        return position
+
+    # 数据数量统计
+    def get_quantity(self,city):
+        pointer = ['',''] #昨天，前天
+        for a in range(1, 135 + 15, 15):
+            if pointer[1] == '':
+                while True:
+                    try:
+                        data = dl.get_resume_days(a)
+                        break
+                    except:
+                        dl.get_cookies2('登录失效')
+                print('城市：{0} 页数：{1} 搜索次数：{2}'.format(city, a, dl.numbers),list(set(data)))
+
+                if pointer[0] == '':
+                    pointer[0] = dl.get_data_slice(a, data, dl.days[1],city)
+                elif pointer[0] != '' and pointer[1] == '':
+                    pointer[1] = dl.get_data_slice(a, data, dl.days[2],city)
             else:
                 break
 
-            htmlf = open('urlIDs.txt', 'a', encoding='UTF-8')
-            htmlf.write(i.get('data-id') + '\n')
-            htmlf.close()
+        if pointer[0] == '':
+            pointer[0] = [1, 1]
 
-    def search_mysql_id(self,resume_id):
-        table_name = 'fenjianli_html'  # 数据表名称
+        if pointer[1] == '':
+            pointer[1] = [135, 1]
+            print("把这个括号里的问题截图给我看（城市：{0} 年龄段：{1}）".format(city, dl.condition['age']))
 
-        db = pymysql.connect(host="192.168.0.41", user="root", password="", db="it-data", port=3306,charset='utf8mb4')  # 连接数据库
-        # cur = db.cursor(cursor=pymysql.cursors.DictCursor)  # 获取一个列表游标
-        cur = db.cursor()  # 获取一个游标
-        cur.execute("select 简历编号 from {0} where 简历编号='{1}'".format(table_name, resume_id))
-        select_id = cur.fetchone()
 
-        if resume_id == None:
-            print('没有',resume_id)
-            dl.down_data(resume_id)
+        pointer[0] = (pointer[0][0] - 1) * 30 + pointer[0][1] - 1
+        pointer[1] = (pointer[1][0] - 1) * 30 + pointer[1][1] - 1 - pointer[0]
+        dl.statistics_data[0][city] += pointer[0]
+        dl.statistics_data[1][city] += pointer[1]
+        # print(dicts_1)
+        # print(dicts_2)
 
-        else:
-            print('有',resume_id)
+    # 启动统计程序
+    def statistics_data_program(self):
+        dl.get_cookies2()
+        dl.condition = {'city': '', 'age': '18,40', 'page': '1'}
+        for d in [0,-1,-2]:
+            dl.days.append((datetime.datetime.now() + datetime.timedelta(days=d)).strftime('%Y-%m-%d'))
+
+        dl.statistics_data.append(dict.fromkeys(dl.statistics_title.keys(), 0))
+        dl.statistics_data.append(dict.fromkeys(dl.statistics_title.keys(), 0))
+
+        dl.statistics_data[0]['日期'] = dl.days[0]
+        dl.statistics_data[1]['日期'] = dl.days[1]
+
+        for k, v in dl.statistics_title.items():
+            if k != '日期':
+                dl.condition['city'] = v
+                dl.condition['age'] = '18,40'
+                while True:
+                    try:
+                        # 检测是否到达前天以下
+                        data = dl.get_resume_days(134)
+                        break
+                    except:
+                        dl.get_cookies2('登录失效')
+
+                # 正式版
+                if dl.days[1] in data:
+                    for s in ['18,23', '24,25', '26,27', '28,29', '30,31', '32,34', '35,37', '38,40']:
+                        dl.condition['age'] = s
+                        dl.get_quantity(k)
+                else:
+                    dl.get_quantity(k)
+
+                # 测试版 检测是否到达前天以下
+                # if dl.days[1] in data:
+                #     for s in ['18,23', '24,25', '26,27', '28,29', '30,31', '32,34', '35,37', '38,40']:
+                #         dl.condition['age'] = s
+                #         while True:
+                #             try:
+                #                 data = dl.get_resume_days(134)
+                #                 if dl.days[1] in data:
+                #                     print(k, list(set(data)), s,'再间隔')
+                #                 else:
+                #                     print(k,list(set(data)),s)
+                #                 break
+                #             except:
+                #                 dl.get_cookies2('登录失效')
+
+        dl.xlwt_to_xls('纷简历-数量统计', list(dl.statistics_title), dl.statistics_data)
+
+    '''--------------------直取程序--------------------'''
+
+    # 检查数据库重复
+    def mysql_judge_1(self):
+        db = pymysql.connect(host=dl.host, user=dl.user, password=dl.password, db=dl.db, port=dl.port,charset=dl.charset)  # 连接数据库
+        cur=db.cursor() # 获取一个游标
+        data=cur.execute("select * from {0}".format('fenjianli_doc'))
+        datas=cur.fetchall()
+
 
         # 提交
         db.commit()
@@ -1296,11 +1371,30 @@ class downloader(object):
         # 关闭连接对象
         db.close()
 
+        return datas
+
+    def test_mysql(self):
+        data = dl.mysql_judge_1()
+        for i in data:
+            dicts = dict.fromkeys(dl.url_fenjianli_3_title, '')
+            for s in range(len(i)):
+                dicts[dl.url_fenjianli_3_title[s]] = i[s]
+            dl.get_url_xinliechang_2(dicts)
+
+        # 新猎场导入用_2
+        if len(dl.url_xinliechang_2_datas) != 0:
+            dl.csv_to_csv('新猎场-3', dl.url_xinliechang_2_title, dl.url_xinliechang_2_datas)
+
 if __name__=='__main__':
 
     dl = downloader()
     print('请选择模式：')
-    print('《转换》输入"1" | 《上传》输入"2" | 《下载》输入"3"')
+    print('《转换》输入"1" | 《上传》输入"2" | 《下载》输入"3" | 《统计》输入"4"')
+    dl.makedirs('.\data-上传')
+    dl.makedirs('.\data-下载\html')
+    dl.makedirs('.\data-下载\doc')
+    dl.makedirs('.\data-转换')
+    dl.makedirs('.\data-转换\错误简历')
     select=input()
     if select=='1':
         dl.turn_data_program()
@@ -1308,3 +1402,10 @@ if __name__=='__main__':
         dl.up_data_program()
     elif select=='3':
         dl.down_data_program()
+    elif select=='4':
+        dl.statistics_data_program()
+
+
+
+
+
