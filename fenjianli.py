@@ -5,7 +5,6 @@ from selenium import webdriver
 from configparser import ConfigParser
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor #线程池，进程池
 from shutil import copyfile
-from fake_useragent import UserAgent
 
 class proxyIP_object(object):
     def __init__(self):
@@ -13,7 +12,7 @@ class proxyIP_object(object):
         self.proxyIP_All=[]
         self.proxyIP_True=[]
         self.proxyIP_Head=['ip','port','genre']
-        self.headers = {'User-Agent': UserAgent().random }
+        self.headers = {'User-Agent': random.choice(dl.UserAgent_List) }
 
     # 西刺代理 http://www.xicidaili.com
     def xicidaili(self,page):
@@ -181,6 +180,28 @@ class downloader(object):
         # self.statistics_title = {'日期':0,'天津': 120000}
         self.statistics_data = []
 
+        self.UserAgent_List = [
+            "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36",
+             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.1 Safari/537.36",
+             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.0 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.0 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2226.0 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 6.4; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2225.0 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2225.0 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2224.3 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.93 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.93 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 4.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.67 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.67 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.3319.102 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.2309.372 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.2117.157 Safari/537.36",
+             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36",
+             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1866.237 Safari/537.36",
+            ]
+
         self.conversion_situation={'正确简历':0,'错误简历':0,'其他类型':0}
         self.upload_situation={'上传成功':0,'存在简历':0,'上传失败':0}
         self.download_situation = {'下载成功': 0,'下载失败': 0}
@@ -264,7 +285,7 @@ class downloader(object):
         while True:
             try:
                 url = 'http://www.fenjianli.com/user'
-                headers = {'User-Agent': UserAgent().random}
+                headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                 cookies = {'fid': dl.cookie}
                 html = requests.post(url, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=3)
                 html = json.loads(html.text)
@@ -311,7 +332,7 @@ class downloader(object):
             dl.account = cp.get("search_condition", "account")
             dl.account_password = cp.get("search_condition", "account_password")
             dl.data_D_max = int(cp.get("search_condition", "data_D_max"))
-            for i in ['keywords','city','age','degree','sex','salarys','update','hideDownloaded','page']:
+            for i in ['keywords','city','age','degree','trade','job','sex','salarys','update','hideDownloaded','page']:
                 data=cp.get("search_condition", i)
                 if data != '':
                     dicts.update({i: data})
@@ -1036,7 +1057,7 @@ class downloader(object):
             files = {'file': (name, f, 'application/msword', {'Expires': '0'})}
             while True:
                 try:
-                    headers = {'User-Agent': UserAgent().random}
+                    headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                     success = requests.post(url, files=files, cookies=cookies,headers=headers,proxies=dl.proxiess,timeout=10)
                     success = str(json.loads(success.text))
                     break
@@ -1113,7 +1134,7 @@ class downloader(object):
         dl.account=input('下载账号：')
         dl.data_D_max=int(input('下载数量：'))
 
-        dicts={'关键词':'keywords','城市编号':'city','年龄':'age','学历编号':'degree','性别':'sex','期望薪资':'salarys','更新日期':'update'}
+        dicts={'关键词':'keywords','城市':'city','年龄':'age','学历':'degree','行业':'trade','职业':'job','性别':'sex','期望薪资':'salarys','更新日期':'update'}
         for k,v in dicts.items():
             name = input( k + '：')
             if name != '':
@@ -1130,7 +1151,7 @@ class downloader(object):
         payload=dl.condition
         while True:
             try:
-                headers = {'User-Agent': UserAgent().random}
+                headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                 html = requests.post(url, data=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10).text
                 html = json.loads(html)['data']['data']
                 break
@@ -1151,8 +1172,6 @@ class downloader(object):
                 pass
             else:
                 break
-
-    # dl.numbers = int(dl.get_score())
 
     # 判断ID是否存在
     def search_mysql(self,resume_id):
@@ -1228,7 +1247,7 @@ class downloader(object):
         payload={'resumeId':resume_id}
         while True:
             try:
-                headers = {'User-Agent': UserAgent().random}
+                headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                 html = requests.post(url, data=payload, cookies=cookies, headers=headers).text
                 htmlf = json.loads(html)['msg']
                 dl.data_D_min += 1
@@ -1249,7 +1268,7 @@ class downloader(object):
 
         while True:
             try:
-                headers = {'User-Agent': UserAgent().random}
+                headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                 html = requests.get(url, params=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10).text
                 break
             except:
@@ -1268,7 +1287,7 @@ class downloader(object):
 
         while True:
             try:
-                headers = {'User-Agent': UserAgent().random}
+                headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                 html = requests.post(url, data=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10)
                 break
             except:
@@ -1361,7 +1380,7 @@ class downloader(object):
         payload = dl.condition
         while True:
             try:
-                headers = {'User-Agent': UserAgent().random}
+                headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                 html = requests.post(url, data=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10).text
                 break
             except:
