@@ -5,6 +5,132 @@ from selenium import webdriver
 from configparser import ConfigParser
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor #线程池，进程池
 from shutil import copyfile
+from fake_useragent import UserAgent
+
+class proxyIP_object(object):
+    def __init__(self):
+        self.proxyIP_status=False
+        self.proxyIP_All=[]
+        self.proxyIP_True=[]
+        self.proxyIP_Head=['ip','port','genre']
+        self.headers = {'User-Agent': UserAgent().random }
+
+    # 西刺代理 http://www.xicidaili.com
+    def xicidaili(self,page):
+        for p in range(1,page+1):
+            utl='https://www.xicidaili.com/nn/%s' % (p)
+            html=requests.get(utl,headers=pio.headers).text
+            soup=BeautifulSoup(html,'lxml').findAll(class_='odd')
+            for s in soup:
+                s=s.findAll('td')
+                proxyIP = "{0}:{1}".format(s[1].text, s[2].text)
+                pio.proxyIP_All.append(proxyIP)
+
+    # 快代理 https://www.kuaidaili.com
+    def kuaidaili(self,page):
+        for p in range(1,page+1):
+            utl='https://www.kuaidaili.com/free/inha/%s/' % (p)
+            html=requests.get(utl,headers=pio.headers).text
+            soup=BeautifulSoup(html,'lxml').find('tbody').findAll('tr')
+            for s in soup:
+                s=s.findAll('td')
+                proxyIP = "{0}:{1}".format(s[0].text, s[1].text)
+                pio.proxyIP_All.append(proxyIP)
+            time.sleep(1)
+
+    # 云代理 http://www.ip3366.net
+    def ip3366(self,page):
+        for p in range(1,page+1):
+            utl='http://www.ip3366.net/free/?stype=1&page=%s' % (p)
+            html=requests.get(utl,headers=pio.headers).text
+            soup = BeautifulSoup(html, 'lxml').find('tbody').findAll('tr')
+            for s in soup:
+                s=s.findAll('td')
+                proxyIP = "{0}:{1}".format(s[0].text, s[1].text)
+                pio.proxyIP_All.append(proxyIP)
+
+    # 无忧代理 http://www.data5u.com/
+    def data5u(self):
+        utl='http://www.data5u.com/free/gngn/index.shtml'
+        html=requests.get(utl,headers=pio.headers).text
+        soup = BeautifulSoup(html, 'lxml').find(style="text-align:center;").findAll('ul')[1:]
+        for s in soup:
+            s=s.findAll('span')
+            proxyIP = "{0}:{1}".format(s[0].text, s[1].text)
+            pio.proxyIP_All.append(proxyIP)
+
+    # 66ip代理 http://www.66ip.cn
+    def ip66(self,isp,anonymoustype,proxytype):
+        utl='http://www.66ip.cn/nmtq.php'
+        payload={
+                'getnum': 300,
+                'isp': isp,
+                'anonymoustype': anonymoustype,
+                'start': '',
+                'ports':'' ,
+                'export':'' ,
+                'ipaddress':'' ,
+                'area': 1,
+                'proxytype': proxytype,
+                'api': '66ip'
+                }
+        if payload['proxytype']==1:
+            proxytypes='https'
+        else:
+            proxytypes = 'http'
+        html=requests.get(utl,params=payload,headers=pio.headers).text
+        soup=BeautifulSoup(html,'lxml').text.split('\t')
+        lists=[]
+        for i in soup:
+            try:
+                lists.append(re.search("\d+\.\d+\.\d+\.\d+\:\d+", i).group(0))
+            except:
+                pass
+        for l in lists:
+            proxyIP = l
+            pio.proxyIP_All.append(proxyIP)
+        time.sleep(1)
+
+    # 代理情况判断
+    def IP_Judge_True(self,proxies,name_url=1):
+        if name_url == 1 :
+            url = 'http://2019.ip138.com/ic.asp'
+        elif name_url == 2:
+            url = 'http://myip.kkcha.com/'
+
+        proxiess = {'http': proxies}
+        try:
+            html = requests.get(url, headers=pio.headers,proxies=proxiess,timeout=3).text
+            soup = BeautifulSoup(html, 'lxml').text
+            if name_url == 1 :
+                soup = re.search("\[(\d+.)*", soup).group(0).replace('[','').replace(']','')
+            elif name_url == 2 :
+                soup = re.search("'([0-9]+.)*", soup).group().replace("'", '')
+            return proxies
+        except:
+            pass
+
+    # 启动代理IP获得程序
+    def proxyIP_data_program(self):
+
+        if os.path.exists('ProxyIP.txt') == True:
+            with open('.\ProxyIP.txt', 'r', encoding='UTF-8') as f:
+                pio.proxyIP_True = f.read().split('\n')
+        else:
+            print('获得代理IP中..............')
+            # 免费代理地址
+            pio.xicidaili(3)
+            pio.kuaidaili(3)
+            pio.ip3366(3)
+            pio.data5u()
+            [pio.ip66(a, b, c) for a in [1, 2, 3, 4] for b in [2, 3, 4] for c in [0, 1]]
+
+            pio.proxyIP_All = list(set(pio.proxyIP_All))
+            pool = ThreadPoolExecutor()
+            pio.proxyIP_True = [i for i in pool.map(pio.IP_Judge_True, pio.proxyIP_All) if i != None]
+            with open('.\ProxyIP.txt', 'w', encoding='UTF-8') as f:
+                f.write('\n'.join(pio.proxyIP_True))
+        dl.proxiess = {'http': random.choice(pio.proxyIP_True)}
 
 class downloader(object):
     def __init__(self):
@@ -16,9 +142,10 @@ class downloader(object):
         self.data_D_min = 0
         self.data_U_max = 300
         self.data_U_min = 0
-        self.condition={}
-        self.account=''
-        self.account_password=''
+        self.condition = {}
+        self.account = ''
+        self.account_password = ''
+        self.proxiess = {}
 
         # 数据库启动
         self.sql_status=True
@@ -134,23 +261,26 @@ class downloader(object):
 
     # 读取下载剩余简历数
     def get_score(self):
-        url = 'http://www.fenjianli.com/user'
-        headers = {
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Connection': 'keep-alive',
-            'Content-Length': '0',
-            'Host': 'www.fenjianli.com',
-            'Origin': 'http://www.fenjianli.com',
-            'Referer': 'http://www.fenjianli.com/share',
-            'X-Requested-With': 'XMLHttpRequest',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36',
-        }
-        cookies = {'fid': dl.cookie}
-        html = requests.post(url, cookies=cookies, headers=headers)
-        html = json.loads(html.text)
-        htmls = str(html['data']['usable_download_time'])
+        while True:
+            try:
+                url = 'http://www.fenjianli.com/user'
+                headers = {'User-Agent': UserAgent().random}
+                cookies = {'fid': dl.cookie}
+                html = requests.post(url, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=3)
+                html = json.loads(html.text)
+                break
+            except :
+                if pio.proxyIP_status == True:
+                    dl.proxiess = {'http': random.choice(pio.proxyIP_True)}
+                    print('代理IP：', dl.proxiess)
+                else:
+                    break
+        while True:
+            try:
+                htmls = str(html['data']['usable_download_time'])
+                break
+            except:
+                dl.get_cookies2('登录失效')
         return htmls
 
     # 自动新建文件夹
@@ -164,13 +294,16 @@ class downloader(object):
         cp.read(".\config.ini",encoding='utf-8-sig')
 
         # 读取数据库信息
-        dl.sql_status = True if cp.get("mysql_db", "sql_status")=='True' else False
+        dl.sql_status = True if cp.get("mysql_db", "sql_status") == 'True' else False
         dl.host = cp.get("mysql_db", "host")
         dl.port = int(cp.getint("mysql_db", "port"))
         dl.db = cp.get("mysql_db", "db")
         dl.user = cp.get("mysql_db", "user")
         dl.password = cp.get("mysql_db", "password")
         dl.charset = cp.get("mysql_db", "charset")
+
+        # 是否代理IP
+        pio.proxyIP_status = True if cp.get("search_condition", "proxyIP_status") == 'True' else False
 
         # 下载条件数据
         if operating=='下载':
@@ -571,6 +704,9 @@ class downloader(object):
                         lens=len(pointers)
                         if lens==1:
                             tables_dicts['培训时间'] = pointers[0].text.replace('-','/').replace(' /',' -')
+                        elif lens==2:
+                            tables_dicts['培训时间'] = pointers[0].text.replace('-','/').replace(' /',' -')
+                            tables_dicts['培训机构'] = pointers[1].text
                         else:
                             tables_dicts['培训时间'] = pointers[0].text.replace('-','/').replace(' /',' -')
                             tables_dicts['培训机构'] = pointers[1].text
@@ -847,16 +983,17 @@ class downloader(object):
 
             # 启动文件地址提取和转换程序
             for root, dirs, files in os.walk('.\data-转换'):
-                for file in files:
-                    files=os.path.splitext(file)[1]
-                    if files == '.html':
-                        dl.url_fenjianli_4.append(os.path.join(root, file))
+                    for file in files:
+                        if '错误简历' not in root:
+                            files=os.path.splitext(file)[1]
+                            if files == '.html':
+                                dl.url_fenjianli_4.append(os.path.join(root, file))
 
-                    elif files == '.doc':
-                        dl.url_fenjianli_3.append(os.path.join(root, file))
-                    else:
-                        dl.conversion_situation['其他类型'] += 1
-                        print('其他类型：', file)
+                            elif files == '.doc':
+                                dl.url_fenjianli_3.append(os.path.join(root, file))
+                            else:
+                                dl.conversion_situation['其他类型'] += 1
+                                print('其他类型：', file)
 
             if len(dl.url_fenjianli_3) == 0 and len(dl.url_fenjianli_4) == 0:
                 print('请放入转换文件')
@@ -894,26 +1031,34 @@ class downloader(object):
         name = str(random.randint(10000000, 100000000))+os.path.splitext(path)[-1]
         url = 'http://www.fenjianli.com/share/upload'
         cookies = {'fid': dl.cookie}
+
         with open(path, 'rb') as f:
-
             files = {'file': (name, f, 'application/msword', {'Expires': '0'})}
-            success = requests.post(url, files=files, cookies=cookies)
-            success=str(json.loads(success.text))
+            while True:
+                try:
+                    headers = {'User-Agent': UserAgent().random}
+                    success = requests.post(url, files=files, cookies=cookies,headers=headers,proxies=dl.proxiess,timeout=10)
+                    success = str(json.loads(success.text))
+                    break
+                except:
+                    if pio.proxyIP_status == True:
+                        dl.get_score()
+                    else:
+                        break
+
             if '上传成功' in success:
-                msg = '上传成功'
-                dl.upload_situation['上传成功'] += 1
                 dl.data_U_min += 1
-
+                dl.upload_situation['上传成功'] += 1
+                msg = '上传成功'
             elif '已存在相同简历' in success:
-                msg = '存在简历'
                 dl.upload_situation['存在简历'] += 1
-
+                msg = '存在简历'
             elif '登录状态已失效' in success:
                 msg = '登录状态已失效'
-
             else:
-                msg = '上传失败'
                 dl.upload_situation['上传失败'] += 1
+                msg = '上传失败'
+
         return msg,path
 
     # 启动上传程序
@@ -931,19 +1076,24 @@ class downloader(object):
                 time.sleep(5)
 
             else:
+
                 if os.path.exists('config.ini') == True:
                     dl.get_conf('上传')
+                print('可上传数量：' , len(dl.url_all) , '\n要上传数量：' ,dl.data_U_max)
+
                 dl.get_cookies2()
-                print('可上传数量：' + str(len(dl.url_all)) + '\n要上传数量：' + str (dl.data_U_max))
+
+                dl.numbers =int(dl.get_score())
 
                 # 多线程
                 pool = ThreadPoolExecutor(5)
                 for data_report_1,data_report_2 in pool.map(dl.post_files, dl.url_all):
                     if dl.data_U_min < dl.data_U_max:
-                        print(data_report_1 + "：剩余" + dl.get_score() + ' 上传成功' + str (dl.data_U_min))
                         if data_report_1 == '登录状态已失效':
                             print('----------《登录失效请重新登录账户》----------')
+                            os.remove('./cookie.txt')
                             break
+                        print(data_report_1 , "：剩余" , dl.numbers + dl.data_U_min , ' 上传成功' , dl.data_U_min)
                         os.remove(data_report_2)
                     else:
                         break
@@ -951,7 +1101,6 @@ class downloader(object):
         except BaseException as e:
             print(e)
         finally:
-            print()
             print("上传成功：%d | 存在简历：%d | 上传失败：%d"  % (dl.upload_situation['上传成功'], dl.upload_situation['存在简历'],dl.upload_situation['上传失败']))
             input("回车结束程序")
 
@@ -960,73 +1109,54 @@ class downloader(object):
     # 搜索条件模块
     def search_condition(self):
 
+
         dl.account=input('下载账号：')
         dl.data_D_max=int(input('下载数量：'))
 
-        #条件
-        dicts = {}
-        keywords = input('关键词：')
-        if keywords != '':
-            dicts.update({'keywords': keywords})
+        dicts={'关键词':'keywords','城市编号':'city','年龄':'age','学历编号':'degree','性别':'sex','期望薪资':'salarys','更新日期':'update'}
+        for k,v in dicts.items():
+            name = input( k + '：')
+            if name != '':
+                dl.condition.update({v: name})
 
-        city = input('城市编号：')
-        if city != '':
-            dicts.update({'city': city})
-
-        age = input('年龄：')
-        if age != '':
-            dicts.update({'age': age})
-
-        degree = input('学历编号：')
-        if degree != '':
-            dicts.update({'degree': degree})
-
-        sex = input('性别：')
-        if sex != '':
-            dicts.update({'sex': sex})
-
-        salarys = input('期望薪资：')
-        if salarys != '':
-            dicts.update({'salarys': salarys})
-
-        update = input('更新日期：')
-        if update != '':
-            dicts.update({'update': update})
-
-        dicts.update({'hideDownloaded': 1})
-        dicts.update({'page': 1})
-        dl.condition = dicts
+        dl.condition.update({'hideDownloaded': '1'})
+        dl.condition.update({'page': '1'})
 
     # 获得简历ID
     def get_resume_id(self,page):
         url = 'http://www.fenjianli.com/search/list'
         cookies = {'fid': dl.cookie}
-        headers={
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Connection': 'keep-alive',
-            'Content-Length': '28',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Host': 'www.fenjianli.com',
-            'Origin': 'http://www.fenjianli.com',
-            'Referer': 'http://www.fenjianli.com/search',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        }
         dl.condition['page']=page
         payload=dl.condition
-        html = requests.post(url, data=payload, cookies=cookies,headers=headers).text
+        while True:
+            try:
+                headers = {'User-Agent': UserAgent().random}
+                html = requests.post(url, data=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10).text
+                html = json.loads(html)['data']['data']
+                break
+            except:
+                if pio.proxyIP_status == True:
+                    dl.get_score()
+                else:
+                    break
 
-        for i in json.loads(html)['data']['data']:
+        # 多线程
+        lists=[]
+        pool = ThreadPoolExecutor(3)
+        for i in html:
+            lists.append(i['es_id'])
+        for data_report in pool.map(dl.search_mysql, lists):
             if dl.data_D_min < dl.data_D_max:
-                dl.search_mysql(i['es_id'])
-                # print(i['es_id'])
+                # print(data_report)
+                pass
             else:
                 break
 
+    # dl.numbers = int(dl.get_score())
+
     # 判断ID是否存在
     def search_mysql(self,resume_id):
-
+        global mag
         #检查数据库是否存在这个简历ID
         if dl.sql_status == True:
             judge = dl.mysql_judge('fenjianli_id', 'select', {'resume_id': resume_id})
@@ -1034,13 +1164,13 @@ class downloader(object):
             judge = None
 
         if judge==None:
-
+            exchange = ''
             # 下载联系方式状态:剩余积分不足/您已经下载过了/success
-            exchange = dl.exchange(resume_id)
 
+            if dl.data_D_min < dl.data_D_max:
+                exchange = dl.exchange(resume_id)
 
             if exchange == 'success':
-                print('未下载简历：剩下',dl.get_score())
 
                 if dl.data_D_min != 0:
                     time.sleep(random.randint(10, 50)/10)
@@ -1063,64 +1193,70 @@ class downloader(object):
                     # dl.get_url_fenjianli_3(os.path.getsize(os.path.join('data-下载\doc\\', resume_id + '.doc')))
                     # dl.get_url_fenjianli_4(os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html')))
 
-                    dl.data_D_min+=1
                     dl.download_situation['下载成功'] += 1
-
+                    print('未下载简历：剩下',dl.numbers-dl.data_D_min, '已下载', dl.data_D_min)
+                    mag = '正确简历'
                 else:
-                    print('下载失败简历：剩下', dl.get_score())
                     dl.download_situation['下载失败'] += 1
+                    print('下载失败简历：剩下', dl.numbers-dl.data_D_min)
+                    mag = '错误简历'
 
             elif exchange == '您已经下载过了':
-                print('已下载简历：剩下', dl.get_score())
+                print('已下载简历：剩下', dl.numbers-dl.data_D_min, '已下载', dl.data_D_min)
+                mag = '已经下载'
 
             elif exchange == '剩余积分不足':
                 print('账号积分不足，请上传简历补充积分')
                 dl.data_D_min = dl.data_D_max
-            else:
-                print('登入一次72招浏览器后再来下载')
+                mag = '积分不足'
+
+            elif exchange == '如需下载简历联系方式，请使用72招浏览器！':
+                print('如需下载简历联系方式，请使用72招浏览器！')
                 dl.data_D_min = dl.data_D_max
+                os.remove('./cookie.txt')
+                mag = '登入失效'
+
         else:
-            print('已下载简历：剩下',dl.get_score())
+            print('已下载简历：剩下', dl.numbers-dl.data_D_min, '已下载', dl.data_D_min)
+            mag = '已经下载'
+        return mag
 
     # 下载联系方式
     def exchange(self,resume_id):
         url = 'http://www.fenjianli.com/resume/download'
         cookies = {'fid': dl.cookie}
-        headers={
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Connection': 'keep-alive',
-            'Content-Length': '31',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Host': 'www.fenjianli.com',
-            'Origin': 'http://www.fenjianli.com',
-            'Referer': 'http://www.fenjianli.com/resume/resumeTemplate?resumeId=' + resume_id + '&keywords=',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        }
         payload={'resumeId':resume_id}
-        html = requests.post(url, data=payload, cookies=cookies,headers=headers).text
+        while True:
+            try:
+                headers = {'User-Agent': UserAgent().random}
+                html = requests.post(url, data=payload, cookies=cookies, headers=headers).text
+                htmlf = json.loads(html)['msg']
+                dl.data_D_min += 1
+                break
+            except:
+                if pio.proxyIP_status == True:
+                    dl.get_score()
+                else:
+                    break
 
-        htmlf=json.loads(html)['msg']
         return htmlf
 
     # 下载简历html数据
     def download_html(self,resume_id):
         url = 'http://www.fenjianli.com/resume/resumeTemplate'
         cookies = {'fid': dl.cookie}
-        headers={
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Connection': 'keep-alive',
-            'Host': 'www.fenjianli.com',
-            'Referer': 'http://www.fenjianli.com/resume/detail?resumeIds='+resume_id+'&keywords=',
-            'Upgrade-Insecure-Requests': '1',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        }
         payload = {'resumeId': resume_id}
-        html = requests.get(url, params=payload, cookies=cookies,headers=headers).text
 
+        while True:
+            try:
+                headers = {'User-Agent': UserAgent().random}
+                html = requests.get(url, params=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10).text
+                break
+            except:
+                if pio.proxyIP_status == True:
+                    dl.get_score()
+                else:
+                    break
         with open('data-下载\html\\' + resume_id + '.html', 'w', encoding='UTF-8') as code:
             code.write(html)
 
@@ -1128,20 +1264,18 @@ class downloader(object):
     def download_doc(self,resume_id):
         url = 'http://www.fenjianli.com/resume/export'
         cookies = {'fid': dl.cookie}
-        headers={
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Connection': 'keep-alive',
-            'Content-Length': '41',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Host': 'www.fenjianli.com',
-            'Origin': 'http://www.fenjianli.com',
-            'Referer': 'http://www.fenjianli.com/resume/resumeTemplate?resumeId=' + resume_id + '&keywords=',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        }
         payload={'resumeId':resume_id,'type':'word'}
-        html = requests.post(url, data=payload, cookies=cookies,headers=headers)
+
+        while True:
+            try:
+                headers = {'User-Agent': UserAgent().random}
+                html = requests.post(url, data=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10)
+                break
+            except:
+                if pio.proxyIP_status == True:
+                    dl.get_score()
+                else:
+                    break
 
         with open('data-下载\doc\\' + resume_id + '.doc', 'wb') as code:
             code.write(html.content)
@@ -1157,7 +1291,7 @@ class downloader(object):
             # time.sleep(random.randint(100, 200) / 10)
 
         cycle_number = 0
-        while size == 5298 and cycle_number <= 3:
+        while (size == 5298 or size == 237) and cycle_number <= 3:
             time.sleep(30)
             dl.download_html(resume_id)
             size = os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html'))
@@ -1184,9 +1318,11 @@ class downloader(object):
                 print()
 
             dl.get_cookies2()
+            dl.numbers=int(dl.get_score())
+
 
             #获得每页ID
-            for i in range(1,135):
+            for i in range(int(dl.condition['page']),135):
                 # print(i)
                 if dl.data_D_min < dl.data_D_max:
                     try:
@@ -1221,21 +1357,18 @@ class downloader(object):
     def get_resume_days(self, page):
         url = 'http://www.fenjianli.com/search/list'
         cookies = {'fid': dl.cookie}
-        headers = {
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Connection': 'keep-alive',
-            'Content-Length': '28',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Host': 'www.fenjianli.com',
-            'Origin': 'http://www.fenjianli.com',
-            'Referer': 'http://www.fenjianli.com/search',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        }
         dl.condition['page'] = page
         payload = dl.condition
-        html = requests.post(url, data=payload, cookies=cookies, headers=headers).text
+        while True:
+            try:
+                headers = {'User-Agent': UserAgent().random}
+                html = requests.post(url, data=payload, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=10).text
+                break
+            except:
+                if pio.proxyIP_status == True:
+                    dl.get_score()
+                else:
+                    break
         htmls=[]
         for i in json.loads(html)['data']['data']:
             htmls.append(i['last_date_show'])
@@ -1386,8 +1519,16 @@ class downloader(object):
             dl.csv_to_csv('新猎场-3', dl.url_xinliechang_2_title, dl.url_xinliechang_2_datas)
 
 if __name__=='__main__':
-
     dl = downloader()
+    pio = proxyIP_object()
+
+    # 代理IP获得
+    dl.get_conf()
+    if pio.proxyIP_status == True:
+        pio.proxyIP_data_program()
+        print('获得代理IP数：',len(pio.proxyIP_True))
+        print('代理IP：', dl.proxiess)
+
     print('请选择模式：')
     print('《转换》输入"1" | 《上传》输入"2" | 《下载》输入"3" | 《统计》输入"4"')
     dl.makedirs('.\data-上传')
@@ -1404,8 +1545,3 @@ if __name__=='__main__':
         dl.down_data_program()
     elif select=='4':
         dl.statistics_data_program()
-
-
-
-
-
