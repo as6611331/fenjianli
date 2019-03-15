@@ -1121,6 +1121,7 @@ class downloader(object):
             print(e)
         finally:
             time.sleep(5)
+            print()
             print("上传成功：%d | 存在简历：%d | 上传失败：%d"  % (dl.upload_situation['上传成功'], dl.upload_situation['存在简历'],dl.upload_situation['上传失败']))
             input("回车结束程序")
 
@@ -1362,6 +1363,7 @@ class downloader(object):
         finally:
             #下载结果报告
             time.sleep(5)
+            print()
             print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
             input("回车结束程序")
 
