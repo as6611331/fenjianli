@@ -182,24 +182,24 @@ class downloader(object):
 
         self.UserAgent_List = [
             "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36",
-             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.1 Safari/537.36",
-             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.0 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.0 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2226.0 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 6.4; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2225.0 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2225.0 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2224.3 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.93 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.93 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 4.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.67 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.67 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.3319.102 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.2309.372 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.2117.157 Safari/537.36",
-             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36",
-             "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1866.237 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.1 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2226.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.4; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2225.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2225.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2224.3 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.93 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.93 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 4.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.67 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.67 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.3319.102 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.2309.372 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.2117.157 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1866.237 Safari/537.36",
             ]
 
         self.conversion_situation={'正确简历':0,'错误简历':0,'其他类型':0}
@@ -287,21 +287,20 @@ class downloader(object):
                 url = 'http://www.fenjianli.com/user'
                 headers = {'User-Agent': random.choice(dl.UserAgent_List)}
                 cookies = {'fid': dl.cookie}
-                html = requests.post(url, cookies=cookies, headers=headers,proxies=dl.proxiess,timeout=3)
+                html = requests.post(url, cookies=cookies, headers=headers, proxies=dl.proxiess, timeout=3)
                 html = json.loads(html.text)
+                if html['code'] == 302:
+                    dl.get_cookies2('登录失效')
+                htmls = str(html['data']['usable_download_time'])
                 break
             except :
+
                 if pio.proxyIP_status == True:
                     dl.proxiess = {'http': random.choice(pio.proxyIP_True)}
                     print('代理IP：', dl.proxiess)
                 else:
                     break
-        while True:
-            try:
-                htmls = str(html['data']['usable_download_time'])
-                break
-            except:
-                dl.get_cookies2('登录失效')
+
         return htmls
 
     # 自动新建文件夹
@@ -1103,7 +1102,6 @@ class downloader(object):
                 print('可上传数量：' , len(dl.url_all) , '\n要上传数量：' ,dl.data_U_max)
 
                 dl.get_cookies2()
-
                 dl.numbers =int(dl.get_score())
 
                 # 多线程
@@ -1114,7 +1112,7 @@ class downloader(object):
                             print('----------《登录失效请重新登录账户》----------')
                             os.remove('./cookie.txt')
                             break
-                        print(data_report_1 , "：剩余" , dl.numbers + dl.data_U_min , ' 上传成功' , dl.data_U_min)
+                        print(data_report_1 , "剩余" , dl.numbers + dl.data_U_min , '已上传' , dl.data_U_min)
                         os.remove(data_report_2)
                     else:
                         break
@@ -1122,6 +1120,7 @@ class downloader(object):
         except BaseException as e:
             print(e)
         finally:
+            time.sleep(5)
             print("上传成功：%d | 存在简历：%d | 上传失败：%d"  % (dl.upload_situation['上传成功'], dl.upload_situation['存在简历'],dl.upload_situation['上传失败']))
             input("回车结束程序")
 
@@ -1182,8 +1181,9 @@ class downloader(object):
         else:
             judge = None
 
+        exchange = ''
+
         if judge==None:
-            exchange = ''
             # 下载联系方式状态:剩余积分不足/您已经下载过了/success
 
             if dl.data_D_min < dl.data_D_max:
@@ -1213,31 +1213,25 @@ class downloader(object):
                     # dl.get_url_fenjianli_4(os.path.getsize(os.path.join('data-下载\html\\', resume_id + '.html')))
 
                     dl.download_situation['下载成功'] += 1
-                    print('未下载简历：剩下',dl.numbers-dl.data_D_min, '已下载', dl.data_D_min)
-                    mag = '正确简历'
+                    mag = '下载成功'
                 else:
                     dl.download_situation['下载失败'] += 1
-                    print('下载失败简历：剩下', dl.numbers-dl.data_D_min)
-                    mag = '错误简历'
+                    mag = '下载失败'
 
             elif exchange == '您已经下载过了':
-                print('已下载简历：剩下', dl.numbers-dl.data_D_min, '已下载', dl.data_D_min)
-                mag = '已经下载'
-
-            elif exchange == '剩余积分不足':
-                print('账号积分不足，请上传简历补充积分')
-                dl.data_D_min = dl.data_D_max
-                mag = '积分不足'
-
-            elif exchange == '如需下载简历联系方式，请使用72招浏览器！':
-                print('如需下载简历联系方式，请使用72招浏览器！')
-                dl.data_D_min = dl.data_D_max
-                os.remove('./cookie.txt')
-                mag = '登入失效'
-
+                mag = '存在简历'
         else:
-            print('已下载简历：剩下', dl.numbers-dl.data_D_min, '已下载', dl.data_D_min)
-            mag = '已经下载'
+            mag = '存在简历'
+
+        if exchange == '如需下载简历联系方式，请使用72招浏览器！':
+            print('如需下载简历联系方式，请使用72招浏览器！')
+            dl.data_D_min = dl.data_D_max
+        elif exchange == '剩余积分不足':
+            print('账号积分不足，请上传简历补充积分')
+            dl.data_D_min = dl.data_D_max
+        else:
+            print(mag,'剩下', dl.numbers - dl.data_D_min, '已下载', dl.data_D_min)
+
         return mag
 
     # 下载联系方式
@@ -1367,6 +1361,7 @@ class downloader(object):
             print(e)
         finally:
             #下载结果报告
+            time.sleep(5)
             print("下载成功：%d | 下载失败：%d" % (dl.download_situation['下载成功'], dl.download_situation['下载失败']))
             input("回车结束程序")
 
