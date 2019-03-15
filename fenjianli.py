@@ -331,7 +331,7 @@ class downloader(object):
             dl.account = cp.get("search_condition", "account")
             dl.account_password = cp.get("search_condition", "account_password")
             dl.data_D_max = int(cp.get("search_condition", "data_D_max"))
-            for i in ['keywords','city','age','degree','trade','job','sex','salarys','update','hideDownloaded','page']:
+            for i in ['keywords','city','age','degree','hTrade','hJobsCNT','sex','salarys','update','hideDownloaded','page']:
                 data=cp.get("search_condition", i)
                 if data != '':
                     dicts.update({i: data})
@@ -1134,7 +1134,7 @@ class downloader(object):
         dl.account=input('下载账号：')
         dl.data_D_max=int(input('下载数量：'))
 
-        dicts={'关键词':'keywords','城市':'city','年龄':'age','学历':'degree','行业':'trade','职业':'job','性别':'sex','期望薪资':'salarys','更新日期':'update'}
+        dicts={'关键词':'keywords','城市':'city','年龄':'age','学历':'degree','行业':'hTrade','职业':'hJobsCNT','性别':'sex','期望薪资':'salarys','更新日期':'update'}
         for k,v in dicts.items():
             name = input( k + '：')
             if name != '':
